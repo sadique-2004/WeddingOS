@@ -13,6 +13,8 @@ import TasksPage from '../../pages/tasks/TasksPage'
 import InvitationsPage from '../../pages/invitations/InvitationsPage'
 import ExpensesPage from '../../pages/expenses/ExpensesPage'
 import VendorsPage from '../../pages/vendors/VendorsPage'
+import WebsiteStudioPage from '../../pages/website/WebsiteStudioPage'
+import PublicWeddingPage from '../../pages/public/PublicWeddingPage'
 import ProtectedRoute from '../components/ProtectedRoute'
 
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react'
@@ -43,6 +45,14 @@ export const router = createBrowserRouter([
   {
     path: '/sso-callback',
     element: <AuthenticateWithRedirectCallback signUpForceRedirectUrl="/app/onboarding" signInForceRedirectUrl="/app/dashboard" />,
+  },
+  {
+    path: '/w/:slug',
+    element: <PublicWeddingPage />,
+  },
+  {
+    path: '/w/preview',
+    element: <PublicWeddingPage />,
   },
   {
     path: '/app/onboarding',
@@ -87,6 +97,10 @@ export const router = createBrowserRouter([
       {
         path: 'vendors',
         element: <VendorsPage />,
+      },
+      {
+        path: 'website',
+        element: <WebsiteStudioPage />,
       },
     ],
   },
