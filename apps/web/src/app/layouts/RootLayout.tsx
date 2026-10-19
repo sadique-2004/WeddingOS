@@ -1,15 +1,32 @@
+import { useState, useEffect } from 'react'
 import { Link, Outlet } from 'react-router-dom'
 import { ArrowUpRight } from 'lucide-react'
+import { useAuth } from '@clerk/clerk-react'
 
 export default function RootLayout() {
+  const { isLoaded, isSignedIn } = useAuth()
+  const [scrolled, setScrolled] = useState(false)
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 60)
+    }
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
   return (
     <div className="min-h-screen flex flex-col bg-[#faf9f6] text-[#2d2a2a] font-sans antialiased selection:bg-[#e6bd81]/40 selection:text-[#4b030e]">
       {/* ========================================== */}
-      {/* TOP STICKY NAVIGATION BAR                  */}
+      {/* 1. INITIAL TOP NAVBAR (BEFORE SCROLL)      */}
       {/* ========================================== */}
-      <header className="sticky top-0 z-50 w-full bg-[#faf9f6]/90 backdrop-blur-md border-b border-[#e6bd81]/30 transition-all duration-300">
+      <header
+        className={`sticky top-0 z-40 w-full bg-[#faf9f6]/90 backdrop-blur-md border-b border-[#e6bd81]/30 transition-all duration-300 ${
+          scrolled ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'
+        }`}
+      >
         <div className="max-w-7xl mx-auto px-6 lg:px-12 h-20 flex items-center justify-between">
-          {/* Logo */}
+          {/* Brand Logo */}
           <Link to="/" className="flex items-center gap-3 group">
             <img
               src="/WeddingOSLogo.png"
@@ -18,33 +35,73 @@ export default function RootLayout() {
             />
           </Link>
 
-          {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-8 text-sm font-medium text-[#4b030e]/80">
-            <a href="/#features" className="hover:text-[#6f0617] transition-colors">Features</a>
-            <a href="/#themes" className="hover:text-[#6f0617] transition-colors">Themes</a>
-            <a href="/#schedule" className="hover:text-[#6f0617] transition-colors">Ceremony Matrix</a>
-            <a href="/#testimonials" className="hover:text-[#6f0617] transition-colors">Testimonials</a>
-            <Link to="/about" className="hover:text-[#6f0617] transition-colors">About</Link>
-          </nav>
-
-          {/* Right Action / Sign In */}
-          <div className="flex items-center gap-5">
-            <Link
-              to="/sign-in"
-              className="text-sm font-semibold text-[#4b030e] hover:text-[#6f0617] transition-colors hidden sm:inline-block"
-            >
-              Sign In
-            </Link>
-            <Link
-              to="/app/onboarding"
-              className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#580412] text-white text-sm font-semibold shadow-gold-sm hover:shadow-gold-glow transition-all duration-300"
-            >
-              <span>Get Started</span>
-              <ArrowUpRight className="w-4 h-4" />
-            </Link>
+          {/* Right Action: Clean Single CTA */}
+          <div className="flex items-center gap-4">
+            {isLoaded && isSignedIn ? (
+              <Link
+                to="/app/dashboard"
+                className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#580412] text-white text-sm font-semibold shadow-gold-sm hover:shadow-gold-glow transition-all duration-300"
+              >
+                <span>Go to Dashboard</span>
+                <ArrowUpRight className="w-4 h-4" />
+              </Link>
+            ) : (
+              <>
+                <Link
+                  to="/sign-in"
+                  className="text-sm font-semibold text-[#4b030e] hover:text-[#6f0617] transition-colors hidden sm:inline-block"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/sign-up?redirect_url=/app/onboarding"
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#580412] text-white text-sm font-semibold shadow-gold-sm hover:shadow-gold-glow transition-all duration-300"
+                >
+                  <span>Get Started</span>
+                  <ArrowUpRight className="w-4 h-4" />
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </header>
+
+      {/* ========================================== */}
+      {/* 2. FLOATING SCROLLED DOCK (AFTER SCROLL)   */}
+      {/* ========================================== */}
+      {/* Left: Floating Rounded Favicon */}
+      <div
+        className={`fixed top-4 sm:top-5 left-4 sm:left-8 z-50 transition-all duration-300 ease-out ${
+          scrolled ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-6 opacity-0 pointer-events-none'
+        }`}
+      >
+        <Link
+          to="/"
+          className="w-12 h-12 rounded-2xl bg-white/90 backdrop-blur-md border border-[#e6bd81]/70 shadow-lg hover:shadow-gold-glow hover:scale-105 transition-all duration-300 flex items-center justify-center p-1.5 group cursor-pointer"
+          title="WeddingOS — Home"
+        >
+          <img
+            src="/favicon.png"
+            alt="WeddingOS"
+            className="w-full h-full object-contain rounded-xl group-hover:scale-105 transition-transform"
+          />
+        </Link>
+      </div>
+
+      {/* Right: Floating Single Action Button */}
+      <div
+        className={`fixed top-4 sm:top-5 right-4 sm:right-8 z-50 transition-all duration-300 ease-out ${
+          scrolled ? 'translate-y-0 opacity-100 pointer-events-auto' : '-translate-y-6 opacity-0 pointer-events-none'
+        }`}
+      >
+        <Link
+          to={isSignedIn ? '/app/dashboard' : '/sign-in'}
+          className="inline-flex items-center gap-2 px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl bg-gradient-to-r from-[#6f0617] via-[#880e1f] to-[#6f0617] text-white text-xs sm:text-sm font-semibold shadow-gold-sm hover:shadow-gold-glow hover:scale-105 border border-[#e6bd81]/50 backdrop-blur-md transition-all duration-300 group cursor-pointer"
+        >
+          <span>{isSignedIn ? 'Go to Dashboard' : 'Open Workspace'}</span>
+          <ArrowUpRight className="w-4 h-4 text-[#e6bd81] group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-transform" />
+        </Link>
+      </div>
 
       {/* Main Page Content */}
       <main className="flex-1 w-full">

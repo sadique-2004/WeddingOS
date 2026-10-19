@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
+import { useAuth } from '@clerk/clerk-react'
 import {
   Sparkles,
   ArrowRight,
@@ -22,6 +23,7 @@ import {
 
 export default function HomePage() {
   const [activeTheme, setActiveTheme] = useState<number>(0)
+  const { isSignedIn } = useAuth()
 
   return (
     <div className="w-full">
@@ -60,10 +62,10 @@ export default function HomePage() {
               {/* Dual CTA Row */}
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3.5 w-full sm:w-auto">
                 <Link
-                  to="/app/onboarding"
+                  to={isSignedIn ? '/app/dashboard' : '/sign-up?redirect_url=/app/onboarding'}
                   className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-xl bg-[#6f0617] hover:bg-[#580412] text-white text-sm sm:text-base font-medium shadow-lg hover:shadow-gold-glow hover:-translate-y-0.5 transition-all duration-300 text-center"
                 >
-                  <span>Create Your Wedding</span>
+                  <span>{isSignedIn ? 'Go to Workspace' : 'Get Started & Sign Up'}</span>
                   <ArrowRight className="w-4 h-4" />
                 </Link>
                 <a
@@ -698,17 +700,25 @@ export default function HomePage() {
 
             {/* Compact Action CTAs */}
             <div className="pt-1 flex flex-col sm:flex-row items-center justify-center gap-3">
-              <Link to="/app/onboarding" className="w-full sm:w-auto">
-                <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:px-7 sm:py-3 rounded-xl bg-[#e6bd81] hover:bg-white text-[#4b030e] text-xs sm:text-sm font-semibold shadow-md hover:shadow-gold-glow hover:-translate-y-0.5 transition-all duration-300">
-                  <span>Create Free Wedding Workspace</span>
+              <Link to={isSignedIn ? '/app/dashboard' : '/sign-up?redirect_url=/app/onboarding'} className="w-full sm:w-auto">
+                <button className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-2.5 sm:px-7 sm:py-3 rounded-xl bg-[#e6bd81] hover:bg-white text-[#4b030e] text-xs sm:text-sm font-semibold shadow-md hover:shadow-gold-glow hover:-translate-y-0.5 transition-all duration-300 cursor-pointer">
+                  <span>{isSignedIn ? 'Open Wedding Workspace' : 'Get Started & Create Account'}</span>
                   <ArrowRight className="w-3.5 h-3.5 text-[#4b030e]" />
                 </button>
               </Link>
-              <Link to="/sign-in" className="w-full sm:w-auto">
-                <button className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border border-[#e6bd81]/50 hover:bg-white/10 text-white text-xs sm:text-sm font-medium transition-all duration-300">
-                  Sign In to Workspace
-                </button>
-              </Link>
+              {!isSignedIn ? (
+                <Link to="/sign-in" className="w-full sm:w-auto">
+                  <button className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border border-[#e6bd81]/50 hover:bg-white/10 text-white text-xs sm:text-sm font-medium transition-all duration-300 cursor-pointer">
+                    Sign In to Workspace
+                  </button>
+                </Link>
+              ) : (
+                <Link to="/app/onboarding" className="w-full sm:w-auto">
+                  <button className="w-full sm:w-auto inline-flex items-center justify-center px-5 py-2.5 sm:px-6 sm:py-3 rounded-xl border border-[#e6bd81]/50 hover:bg-white/10 text-white text-xs sm:text-sm font-medium transition-all duration-300 cursor-pointer">
+                    + New Wedding Setup
+                  </button>
+                </Link>
+              )}
             </div>
 
             {/* Compact Trust Proof Points */}
