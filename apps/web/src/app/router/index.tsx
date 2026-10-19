@@ -12,6 +12,7 @@ import EventsPage from '../../pages/events/EventsPage'
 import TasksPage from '../../pages/tasks/TasksPage'
 import InvitationsPage from '../../pages/invitations/InvitationsPage'
 import ExpensesPage from '../../pages/expenses/ExpensesPage'
+import VendorsPage from '../../pages/vendors/VendorsPage'
 import ProtectedRoute from '../components/ProtectedRoute'
 
 import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react'
@@ -82,6 +83,10 @@ export const router = createBrowserRouter([
       {
         path: 'expenses',
         element: <ExpensesPage />,
+      },
+      {
+        path: 'vendors',
+        element: <VendorsPage />,
       },
     ],
   },
