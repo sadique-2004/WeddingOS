@@ -8,7 +8,16 @@ const PUBLISHABLE_KEY =
 
 export default function App() {
   return (
-    <ClerkProvider publishableKey={PUBLISHABLE_KEY} afterSignOutUrl="/sign-in">
+    <ClerkProvider
+      publishableKey={PUBLISHABLE_KEY}
+      signInFallbackRedirectUrl="/app/dashboard"
+      signUpFallbackRedirectUrl="/app/onboarding"
+      signInForceRedirectUrl="/app/dashboard"
+      signUpForceRedirectUrl="/app/onboarding"
+      afterSignInUrl="/app/dashboard"
+      afterSignUpUrl="/app/onboarding"
+      afterSignOutUrl="/sign-in"
+    >
       <RouterProvider router={router} />
     </ClerkProvider>
   )

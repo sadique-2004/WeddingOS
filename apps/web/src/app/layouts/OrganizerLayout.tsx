@@ -22,10 +22,13 @@ import {
   ChevronRight,
 } from 'lucide-react'
 
+import { getLocalAuthSession, clearLocalAuthSession } from '../../services/authService'
+
 export default function OrganizerLayout() {
   const navigate = useNavigate()
   const { signOut } = useClerk()
   const { user } = useUser()
+  const localUser = getLocalAuthSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false) // Initially collapsed as requested
   const [wedding, setWedding] = useState({
@@ -81,6 +84,7 @@ export default function OrganizerLayout() {
   ]
 
   const handleSignOut = async () => {
+    clearLocalAuthSession()
     try {
       await signOut()
     } catch {
@@ -374,6 +378,28 @@ export default function OrganizerLayout() {
                       {user.fullName}
                     </span>
                   )}
+                </div>
+              ) : localUser ? (
+                <div className="flex items-center gap-2.5">
+                  {localUser.avatarUrl ? (
+                    <img
+                      src={localUser.avatarUrl}
+                      alt={localUser.fullName}
+                      className="w-9 h-9 rounded-full object-cover ring-2 ring-[#e6bd81] shadow-xs"
+                    />
+                  ) : (
+                    <div className="w-9 h-9 rounded-full bg-[#6f0617] text-[#e6bd81] flex items-center justify-center font-bold text-xs shadow-xs border border-[#e6bd81]/50">
+                      {localUser.fullName.charAt(0).toUpperCase()}
+                    </div>
+                  )}
+                  <div className="hidden md:flex flex-col text-left">
+                    <span className="text-xs font-semibold text-[#4b030e] max-w-[130px] truncate leading-tight">
+                      {localUser.fullName}
+                    </span>
+                    <span className="text-[10px] text-[#b88444] font-medium leading-tight">
+                      {localUser.role}
+                    </span>
+                  </div>
                 </div>
               ) : (
                 <div className="w-9 h-9 rounded-full bg-[#6f0617] text-[#e6bd81] flex items-center justify-center font-bold text-xs shadow-xs border border-[#e6bd81]/50">

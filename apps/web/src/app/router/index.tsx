@@ -21,8 +21,7 @@ import SettingsPage from '../../pages/settings/SettingsPage'
 import GuestInvitePage from '../../pages/invite/GuestInvitePage'
 import PublicWeddingPage from '../../pages/public/PublicWeddingPage'
 import ProtectedRoute from '../components/ProtectedRoute'
-
-import { AuthenticateWithRedirectCallback } from '@clerk/clerk-react'
+import SsoCallbackPage from '../../pages/auth/SsoCallbackPage'
 
 export const router = createBrowserRouter([
   {
@@ -49,7 +48,15 @@ export const router = createBrowserRouter([
   },
   {
     path: '/sso-callback',
-    element: <AuthenticateWithRedirectCallback signUpForceRedirectUrl="/app/onboarding" signInForceRedirectUrl="/app/dashboard" />,
+    element: <SsoCallbackPage />,
+  },
+  {
+    path: '/sign-in/sso-callback',
+    element: <SsoCallbackPage />,
+  },
+  {
+    path: '/sign-up/sso-callback',
+    element: <SsoCallbackPage />,
   },
   {
     path: '/w/:slug',
