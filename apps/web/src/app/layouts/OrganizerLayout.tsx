@@ -35,16 +35,21 @@ export default function OrganizerLayout() {
     locationName: 'Bengaluru, Karnataka',
   })
 
-  // Load from localStorage if available
+  // Load from localStorage if available & listen for updates
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('weddingos_active_wedding')
-      if (stored) {
-        setWedding(JSON.parse(stored))
+    const loadWedding = () => {
+      try {
+        const stored = localStorage.getItem('weddingos_active_wedding')
+        if (stored) {
+          setWedding(JSON.parse(stored))
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
     }
+    loadWedding()
+    window.addEventListener('weddingos_wedding_updated', loadWedding)
+    return () => window.removeEventListener('weddingos_wedding_updated', loadWedding)
   }, [])
 
   // Calculate days remaining

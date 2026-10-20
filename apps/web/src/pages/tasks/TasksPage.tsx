@@ -374,9 +374,9 @@ export default function TasksPage() {
         <div className="bg-white p-4 rounded-xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">Pending Action</span>
-            <span className="font-cormorant text-2xl font-bold text-[#3a0208]">{todoCount} Tasks</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-[#3a0208] tabular-nums">{todoCount} <span className="text-sm font-medium text-neutral-500">Tasks</span></span>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-600 font-bold text-xs">
+          <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-600 font-bold text-xs tabular-nums">
             {todoCount}
           </div>
         </div>
@@ -385,9 +385,9 @@ export default function TasksPage() {
         <div className="bg-white p-4 rounded-xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">In Execution</span>
-            <span className="font-cormorant text-2xl font-bold text-amber-700">{inProgressCount} Active</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-amber-700 tabular-nums">{inProgressCount} <span className="text-sm font-medium text-amber-600">Active</span></span>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold text-xs">
+          <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 font-bold text-xs tabular-nums">
             {inProgressCount}
           </div>
         </div>
@@ -396,7 +396,7 @@ export default function TasksPage() {
         <div className="bg-white p-4 rounded-xl border border-red-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-red-600 block">Critical Priority</span>
-            <span className="font-cormorant text-2xl font-bold text-red-700">{highPriorityCount} Urgent</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-red-700 tabular-nums">{highPriorityCount} <span className="text-sm font-medium text-red-600">Urgent</span></span>
           </div>
           <div className="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center text-red-700">
             <AlertCircle className="w-4 h-4 text-red-600" />

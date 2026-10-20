@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
 import {
   Users2,
   CheckCircle2,
@@ -18,22 +19,10 @@ import {
   Mail,
   Check,
   Download,
+  QrCode,
 } from 'lucide-react'
-
-export interface FamilyInvitation {
-  id: string
-  displayName: string
-  primaryContactName: string
-  phoneNumber: string
-  email?: string
-  circle: 'Nanihal (Maternal)' | 'Dadihal (Paternal)' | 'Friends & Colleagues' | 'VIP Patrons' | 'International'
-  maxAttendees: number
-  actualAttendees: number
-  rsvpStatus: 'PENDING' | 'ATTENDING' | 'NOT_ATTENDING'
-  ceremoniesAllowed: string[]
-  dietaryNotes?: string
-  invitationToken: string
-}
+import type { FamilyInvitation } from '../../types/invitation'
+import { getInvitations, saveInvitations } from '../../services/invitationStore'
 
 const INITIAL_INVITATIONS: FamilyInvitation[] = [
   {
@@ -122,10 +111,18 @@ const INITIAL_INVITATIONS: FamilyInvitation[] = [
 ]
 
 export default function InvitationsPage() {
-  const [invitations, setInvitations] = useState<FamilyInvitation[]>(INITIAL_INVITATIONS)
+  const [invitations, setInvitations] = useState<FamilyInvitation[]>(getInvitations)
   const [searchQuery, setSearchQuery] = useState('')
   const [circleFilter, setCircleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setInvitations(getInvitations())
+    }
+    window.addEventListener('weddingos_invitations_updated', handleUpdate)
+    return () => window.removeEventListener('weddingos_invitations_updated', handleUpdate)
+  }, [])
 
   // Modals
   const [isFormModalOpen, setIsFormModalOpen] = useState(false)
@@ -184,17 +181,18 @@ export default function InvitationsPage() {
 
   const handleDelete = (id: string, name: string) => {
     if (confirm(`Remove "${name}" from your royal invitation register?`)) {
-      setInvitations(invitations.filter((i) => i.id !== id))
+      const next = invitations.filter((i) => i.id !== id)
+      setInvitations(next)
+      saveInvitations(next)
     }
   }
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    let next: FamilyInvitation[]
     if (editingInv) {
-      setInvitations(
-        invitations.map((i) =>
-          i.id === editingInv.id ? { ...i, ...formData } : i
-        )
+      next = invitations.map((i) =>
+        i.id === editingInv.id ? { ...i, ...formData } : i
       )
     } else {
       const token = `wos-${formData.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
@@ -203,8 +201,10 @@ export default function InvitationsPage() {
         invitationToken: token,
         ...formData,
       }
-      setInvitations([...invitations, newInv])
+      next = [...invitations, newInv]
     }
+    setInvitations(next)
+    saveInvitations(next)
     setIsFormModalOpen(false)
   }
 
@@ -275,6 +275,14 @@ export default function InvitationsPage() {
             <span>Export CSV</span>
           </button>
 
+          <Link
+            to="/app/check-in"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#faf9f6] border border-[#e6bd81] text-[#4b030e] text-xs font-semibold hover:bg-[#f6ebd9] transition-all cursor-pointer shadow-2xs"
+          >
+            <QrCode className="w-3.5 h-3.5 text-[#b88444]" />
+            <span>Reception Desk Check-In</span>
+          </Link>
+
           <button
             type="button"
             onClick={openAddModal}
@@ -294,7 +302,7 @@ export default function InvitationsPage() {
         <div className="bg-white p-4 rounded-xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">Invited Circles</span>
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-[#3a0208]">{totalFamilies} Families</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-[#3a0208] tabular-nums">{totalFamilies} <span className="text-sm font-medium text-neutral-500">Families</span></span>
             <span className="text-[10px] text-neutral-400 block mt-0.5">Max {maxCapacityGuests} total guest cap</span>
           </div>
           <div className="w-10 h-10 rounded-xl bg-[#faf4ec] border border-[#e6bd81]/40 flex items-center justify-center text-[#6f0617]">
@@ -307,8 +315,8 @@ export default function InvitationsPage() {
           <div className="flex items-center justify-between">
             <div>
               <span className="text-[10px] font-bold tracking-wider uppercase text-emerald-800 block">Confirmed RSVPs</span>
-              <span className="font-cormorant text-2xl sm:text-3xl font-bold text-emerald-900">
-                {totalConfirmedGuests} Guests
+              <span className="font-sans text-xl sm:text-2xl font-bold text-emerald-900 tabular-nums">
+                {totalConfirmedGuests} <span className="text-sm font-medium text-emerald-700">Guests</span>
               </span>
             </div>
             <div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center text-emerald-700">
@@ -324,7 +332,7 @@ export default function InvitationsPage() {
         <div className="bg-white p-4 rounded-xl border border-amber-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-amber-700 block">Awaiting Response</span>
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-amber-900">{pendingFamilies} Families</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-amber-900 tabular-nums">{pendingFamilies} <span className="text-sm font-medium text-amber-700">Families</span></span>
             <span className="text-[10px] text-amber-600 block mt-0.5">Automated nudge ready</span>
           </div>
           <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700">
@@ -336,7 +344,7 @@ export default function InvitationsPage() {
         <div className="bg-white p-4 rounded-xl border border-neutral-200 shadow-xs flex items-center justify-between">
           <div>
             <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">Regrets Received</span>
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-neutral-600">{regretsFamilies} Families</span>
+            <span className="font-sans text-xl sm:text-2xl font-bold text-neutral-600 tabular-nums">{regretsFamilies} <span className="text-sm font-medium text-neutral-500">Families</span></span>
             <span className="text-[10px] text-neutral-400 block mt-0.5">Reallocated seats available</span>
           </div>
           <div className="w-8 h-8 rounded-lg bg-neutral-100 flex items-center justify-center text-neutral-400">
@@ -517,6 +525,16 @@ export default function InvitationsPage() {
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
                       </a>
+
+                      {inv.checkedInAt ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200 shrink-0">
+                          <Check className="w-2.5 h-2.5" /> Checked In
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-neutral-100 text-neutral-500 shrink-0">
+                          Pending Arrival
+                        </span>
+                      )}
                     </div>
                   </td>
 
@@ -788,7 +806,7 @@ export default function InvitationsPage() {
               <button
                 type="button"
                 onClick={() => {
-                  const text = `🌸 Shree Ganeshay Namah 🌸\n\nDearest ${selectedInvForShare.displayName},\n\nWe cordially invite your family to celebrate the wedding of Ananya & Kabir in Udaipur.\n\nPlease confirm your RSVP and view ceremony details at:\n${window.location.origin}/invite/${selectedInvForShare.invitationToken}\n\nWarm regards,\nThe Families`
+                  const text = `🌸 Shree Ganeshay Namah 🌸\n\nDearest ${selectedInvForShare.displayName},\n\nWe cordially invite your family to celebrate our wedding.\n\nPlease confirm your RSVP and view your Fast-Track Reception Entrance QR Pass at:\n${window.location.origin}/invite/${selectedInvForShare.invitationToken}\n\nWarm regards,\nThe Families`
                   navigator.clipboard.writeText(text)
                   alert('WhatsApp message copied to clipboard!')
                 }}
@@ -800,7 +818,7 @@ export default function InvitationsPage() {
 
               <a
                 href={`https://api.whatsapp.com/send?phone=${selectedInvForShare.phoneNumber.replace(/[^0-9]/g, '')}&text=${encodeURIComponent(
-                  `🌸 Shree Ganeshay Namah 🌸\n\nDearest ${selectedInvForShare.displayName},\n\nWith immense joy, we cordially invite your esteemed family to celebrate the holy union of Ananya & Kabir at The Oberoi Udaivilas, Udaipur (Dec 11–13, 2026).\n\nPlease view your bespoke itinerary & confirm your family attendance here:\n${window.location.origin}/invite/${selectedInvForShare.invitationToken}\n\nWarm regards,\nThe Families`
+                  `🌸 Shree Ganeshay Namah 🌸\n\nDearest ${selectedInvForShare.displayName},\n\nWith immense joy, we cordially invite your esteemed family to celebrate our wedding.\n\nPlease confirm your RSVP and access your digital Fast-Track Reception Entrance QR Pass here:\n${window.location.origin}/invite/${selectedInvForShare.invitationToken}\n\nWarm regards,\nThe Families`
                 )}`}
                 target="_blank"
                 rel="noopener noreferrer"

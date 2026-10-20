@@ -22,7 +22,15 @@ import {
   Calendar,
   FileCheck,
   ChevronRight,
+  ChevronDown,
   ShieldCheck,
+  LayoutGrid,
+  List,
+  Utensils,
+  Camera,
+  Music,
+  Car,
+  Gift,
 } from 'lucide-react'
 
 export type VendorCategory =
@@ -54,69 +62,85 @@ export interface VendorContact {
   notes?: string
 }
 
-const CATEGORY_THEMES: Record<
+const CATEGORY_META: Record<
   VendorCategory,
-  { bg: string; text: string; border: string; badge: string }
+  {
+    icon: React.ComponentType<{ className?: string }>
+    bg: string
+    text: string
+    border: string
+    shortLabel: string
+  }
 > = {
   'Venue & Banquets': {
+    icon: Building2,
     bg: 'bg-[#faf4ec]',
     text: 'text-[#85531d]',
-    border: 'border-[#e6bd81]/40',
-    badge: 'bg-[#85531d]',
+    border: 'border-[#e6bd81]/50',
+    shortLabel: 'Venue',
   },
   'Decor & Production': {
+    icon: Sparkles,
     bg: 'bg-[#fdf2f8]',
     text: 'text-pink-800',
     border: 'border-pink-200',
-    badge: 'bg-pink-600',
+    shortLabel: 'Decor',
   },
   'Catering & Banquets': {
+    icon: Utensils,
     bg: 'bg-[#fef3c7]',
     text: 'text-amber-800',
     border: 'border-amber-300',
-    badge: 'bg-amber-600',
+    shortLabel: 'Catering',
   },
   'Photography & Cinema': {
+    icon: Camera,
     bg: 'bg-[#f0fdf4]',
     text: 'text-emerald-800',
     border: 'border-emerald-200',
-    badge: 'bg-emerald-600',
+    shortLabel: 'Cinema',
   },
   'Music & Entertainment': {
+    icon: Music,
     bg: 'bg-[#faf5ff]',
     text: 'text-purple-800',
     border: 'border-purple-200',
-    badge: 'bg-purple-600',
+    shortLabel: 'Music',
   },
   'Bridal & Styling': {
+    icon: Sparkles,
     bg: 'bg-[#fbe6e9]',
     text: 'text-[#6f0617]',
     border: 'border-[#f8cfd5]',
-    badge: 'bg-[#6f0617]',
+    shortLabel: 'Bridal',
   },
   'Logistics & Transport': {
+    icon: Car,
     bg: 'bg-[#f0f9ff]',
     text: 'text-sky-800',
     border: 'border-sky-200',
-    badge: 'bg-sky-600',
+    shortLabel: 'Logistics',
   },
   'Invitations & Gifting': {
+    icon: Gift,
     bg: 'bg-[#fff7ed]',
     text: 'text-orange-800',
     border: 'border-orange-200',
-    badge: 'bg-orange-500',
+    shortLabel: 'Gifting',
   },
   'Priests & Ceremonial': {
+    icon: Building2,
     bg: 'bg-[#fffbeb]',
     text: 'text-yellow-800',
     border: 'border-yellow-200',
-    badge: 'bg-yellow-600',
+    shortLabel: 'Ceremonial',
   },
   Other: {
+    icon: Briefcase,
     bg: 'bg-neutral-100',
     text: 'text-neutral-700',
     border: 'border-neutral-200',
-    badge: 'bg-neutral-500',
+    shortLabel: 'Other',
   },
 }
 
@@ -251,6 +275,12 @@ export default function VendorsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const [expandedNotes, setExpandedNotes] = useState<Record<string, boolean>>({})
+
+  const toggleNotes = (id: string) => {
+    setExpandedNotes((prev) => ({ ...prev, [id]: !prev[id] }))
+  }
 
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingVendor, setEditingVendor] = useState<VendorContact | null>(null)
@@ -310,6 +340,14 @@ export default function VendorsPage() {
   const confirmedCount = vendors.filter((v) => v.contractStatus === 'CONFIRMED').length
   const inDiscussionCount = vendors.filter((v) => v.contractStatus === 'IN_DISCUSSION').length
   const uniqueCategories = Array.from(new Set(vendors.map((v) => v.category)))
+
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: vendors.length }
+    vendors.forEach((v) => {
+      counts[v.category] = (counts[v.category] || 0) + 1
+    })
+    return counts
+  }, [vendors])
 
   // Filtered Vendors
   const filteredVendors = useMemo(() => {
@@ -401,22 +439,22 @@ export default function VendorsPage() {
     switch (status) {
       case 'CONFIRMED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold uppercase tracking-wider">
-            <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-            <span>Contract Locked</span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 text-[10px] font-bold tracking-wider uppercase whitespace-nowrap shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span>Locked</span>
           </span>
         )
       case 'IN_DISCUSSION':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-[10px] font-bold uppercase tracking-wider">
-            <Clock className="w-3 h-3 text-amber-600" />
-            <span>In Discussion</span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-300 text-amber-800 text-[10px] font-bold tracking-wider uppercase whitespace-nowrap shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-500 shrink-0" />
+            <span>Negotiating</span>
           </span>
         )
       case 'COMPLETED':
         return (
-          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-700 text-[10px] font-bold uppercase tracking-wider">
-            <FileCheck className="w-3 h-3 text-neutral-500" />
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-neutral-100 border border-neutral-300 text-neutral-700 text-[10px] font-bold tracking-wider uppercase whitespace-nowrap shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-neutral-400 shrink-0" />
             <span>Fulfilled</span>
           </span>
         )
@@ -424,28 +462,28 @@ export default function VendorsPage() {
   }
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12">
       {/* ========================================= */}
       {/* 1. PAGE HEADER                            */}
       {/* ========================================= */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#e6bd81]/30">
         <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#fdf5ea] border border-[#e6bd81]/40 text-[#85531d] text-[10px] font-bold tracking-widest uppercase mb-1.5">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-[#fdf5ea] border border-[#e6bd81]/40 text-[#85531d] text-[10px] font-bold tracking-widest uppercase mb-1">
             <Sparkles className="w-3 h-3 text-[#85531d]" />
             <span>Palace Partner Network</span>
           </div>
-          <h1 className="font-cormorant text-3xl sm:text-4xl font-normal text-[#3a0208] tracking-tight">
+          <h1 className="font-cormorant text-2xl sm:text-4xl font-normal text-[#3a0208] tracking-tight">
             Vendor Directory &amp; Partner Contracts
           </h1>
-          <p className="text-xs sm:text-sm text-[#4b030e]/75 font-sans mt-0.5">
-            Maintain verified contracts, direct hotlines, agreed deliverable rates, and operational SLAs across all royal suppliers.
+          <p className="text-xs text-[#4b030e]/75 font-sans mt-0.5">
+            Verified suppliers, direct hotlines, committed rates, and operational deliverables.
           </p>
         </div>
 
         <button
           type="button"
           onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#520411] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-md transition-all cursor-pointer shrink-0"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#520411] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-md transition-all cursor-pointer shrink-0"
         >
           <Plus className="w-4 h-4" />
           <span>Add Vendor Partner</span>
@@ -453,283 +491,502 @@ export default function VendorsPage() {
       </div>
 
       {/* ========================================= */}
-      {/* 2. STATS OVERVIEW CARDS                   */}
+      {/* 2. REFINED RESPONSIVE STATS TILES         */}
       {/* ========================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        {/* Card 1: Total Partners */}
-        <div className="bg-white p-5 rounded-2xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {/* Metric 1 */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-[#e6bd81]/40 shadow-2xs flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
               Active Partners
             </span>
-            <div className="font-cormorant text-3xl font-bold text-[#3a0208]">
-              {totalVendors} Vendors
+            <div className="font-sans text-2xl sm:text-3xl font-bold text-[#3a0208] tabular-nums">
+              {totalVendors}
             </div>
-            <span className="text-xs text-neutral-500">Across {uniqueCategories.length} categories</span>
+            <span className="text-[11px] text-neutral-500">Across {uniqueCategories.length} categories</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#faf4ec] border border-[#e6bd81]/50 flex items-center justify-center text-[#85531d]">
-            <Building2 className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-[#faf4ec] border border-[#e6bd81]/50 flex items-center justify-center text-[#85531d] shrink-0">
+            <Building2 className="w-5 h-5" />
           </div>
         </div>
 
-        {/* Card 2: Contracted Value */}
-        <div className="bg-white p-5 rounded-2xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
-              Total Contract Value
+        {/* Metric 2 */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-[#e6bd81]/40 shadow-2xs flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
+              Total Committed
             </span>
-            <div className="font-cormorant text-3xl font-bold text-[#6f0617]">
+            <div className="font-sans text-2xl sm:text-3xl font-bold text-[#6f0617] tabular-nums">
               {formatCompactINR(totalContractValue)}
             </div>
-            <span className="text-xs text-neutral-500">{formatINR(totalContractValue)} agreed</span>
+            <span className="text-[11px] text-neutral-500 truncate block max-w-[120px] tabular-nums" title={formatINR(totalContractValue)}>
+              {formatINR(totalContractValue)}
+            </span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#fbe6e9] border border-[#f8cfd5] flex items-center justify-center text-[#6f0617]">
-            <DollarSign className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-[#fbe6e9] border border-[#f8cfd5] flex items-center justify-center text-[#6f0617] shrink-0">
+            <DollarSign className="w-5 h-5" />
           </div>
         </div>
 
-        {/* Card 3: Contracts Confirmed */}
-        <div className="bg-white p-5 rounded-2xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
-              Contract Status
+        {/* Metric 3 */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-[#e6bd81]/40 shadow-2xs flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
+              Contracts Locked
             </span>
-            <div className="font-cormorant text-3xl font-bold text-emerald-700">
-              {confirmedCount} Locked
+            <div className="font-sans text-2xl sm:text-3xl font-bold text-emerald-700 tabular-nums">
+              {confirmedCount}
             </div>
-            <span className="text-xs text-neutral-500">{inDiscussionCount} in negotiation</span>
+            <span className="text-[11px] text-neutral-500">{inDiscussionCount} in discussion</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700">
-            <ShieldCheck className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center text-emerald-700 shrink-0">
+            <ShieldCheck className="w-5 h-5" />
           </div>
         </div>
 
-        {/* Card 4: Operations SLA */}
-        <div className="bg-white p-5 rounded-2xl border border-[#e6bd81]/40 shadow-xs flex items-center justify-between">
-          <div className="space-y-1">
-            <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
-              Direct Contact Hotlines
+        {/* Metric 4 */}
+        <div className="bg-white p-3.5 sm:p-4 rounded-xl border border-[#e6bd81]/40 shadow-2xs flex items-center justify-between">
+          <div className="space-y-0.5">
+            <span className="text-[9px] sm:text-[10px] font-bold tracking-wider uppercase text-neutral-400 block">
+              Direct Hotlines
             </span>
-            <div className="font-cormorant text-3xl font-bold text-[#b88444]">
-              100% Verified
+            <div className="font-sans text-2xl sm:text-3xl font-bold text-[#b88444] tabular-nums">
+              100%
             </div>
-            <span className="text-xs text-neutral-500">Call &amp; WhatsApp Ready</span>
+            <span className="text-[11px] text-neutral-500">Call &amp; WhatsApp ready</span>
           </div>
-          <div className="w-12 h-12 rounded-xl bg-[#fdfaf2] border border-[#f6e6be] flex items-center justify-center text-[#b88444]">
-            <Phone className="w-6 h-6" />
+          <div className="w-10 h-10 rounded-xl bg-[#fdfaf2] border border-[#f6e6be] flex items-center justify-center text-[#b88444] shrink-0">
+            <Phone className="w-5 h-5" />
           </div>
         </div>
       </div>
 
       {/* ========================================= */}
-      {/* 3. SEARCH & CATEGORY FILTER BAR           */}
+      {/* 3. INTERACTIVE CATEGORY QUICK-CHIPS       */}
       {/* ========================================= */}
-      <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4 bg-[#faf7f2] p-4 rounded-2xl border border-[#e6bd81]/30">
-        
-        {/* Search */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="w-4 h-4 text-neutral-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search vendor name, contact person, city, or phone..."
-            className="w-full h-10 pl-10 pr-4 rounded-xl bg-white border border-[#e6bd81]/40 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617] shadow-2xs"
-          />
-        </div>
-
-        {/* Filters */}
-        <div className="flex flex-wrap items-center gap-2.5">
-          <select
-            value={categoryFilter}
-            onChange={(e) => setCategoryFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl bg-white border border-[#e6bd81]/40 text-xs font-medium text-neutral-800 outline-none cursor-pointer shadow-2xs"
+      <div className="flex items-center gap-1.5 overflow-x-auto pb-1 [scrollbar-width:none]">
+        {/* All Pill */}
+        <button
+          type="button"
+          onClick={() => setCategoryFilter('all')}
+          className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+            categoryFilter === 'all'
+              ? 'bg-[#6f0617] text-white shadow-xs'
+              : 'bg-white border border-[#e6bd81]/40 text-neutral-700 hover:bg-[#faf7f2]'
+          }`}
+        >
+          <span>All Categories</span>
+          <span
+            className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+              categoryFilter === 'all' ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-600'
+            }`}
           >
-            <option value="all">All Categories ({vendors.length})</option>
-            {Object.keys(CATEGORY_THEMES).map((cat) => (
-              <option key={cat} value={cat}>
-                {cat}
-              </option>
-            ))}
-          </select>
+            {categoryCounts['all'] || 0}
+          </span>
+        </button>
 
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="h-10 px-3 rounded-xl bg-white border border-[#e6bd81]/40 text-xs font-medium text-neutral-800 outline-none cursor-pointer shadow-2xs"
-          >
-            <option value="all">All Contract Statuses</option>
-            <option value="CONFIRMED">Contract Locked</option>
-            <option value="IN_DISCUSSION">In Discussion</option>
-            <option value="COMPLETED">Fulfilled</option>
-          </select>
-        </div>
-      </div>
-
-      {/* ========================================= */}
-      {/* 4. VENDOR PARTNER CARDS GRID              */}
-      {/* ========================================= */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredVendors.map((vendor) => {
-          const theme = CATEGORY_THEMES[vendor.category] || CATEGORY_THEMES['Other']
+        {/* Individual Category Pills */}
+        {(Object.keys(CATEGORY_META) as VendorCategory[]).map((cat) => {
+          const meta = CATEGORY_META[cat]
+          const CategoryIcon = meta.icon
+          const count = categoryCounts[cat] || 0
+          const isSelected = categoryFilter === cat
           return (
-            <div
-              key={vendor.id}
-              className="bg-white rounded-2xl border border-[#e6bd81]/40 shadow-xs hover:shadow-gold-sm transition-all duration-300 p-5 sm:p-6 flex flex-col justify-between space-y-4 group"
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setCategoryFilter(isSelected ? 'all' : cat)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 shrink-0 ${
+                isSelected
+                  ? 'bg-[#6f0617] text-white shadow-xs'
+                  : 'bg-white border border-[#e6bd81]/40 text-neutral-700 hover:bg-[#faf7f2]'
+              }`}
             >
-              <div className="space-y-3">
-                
-                {/* Category & Status Row */}
-                <div className="flex items-center justify-between gap-2">
-                  <span
-                    className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${theme.bg} ${theme.text} border ${theme.border}`}
-                  >
-                    {vendor.category}
-                  </span>
-                  {getStatusBadge(vendor.contractStatus)}
-                </div>
-
-                {/* Company Name & Agreed Cost */}
-                <div>
-                  <h3 className="font-cormorant text-2xl font-semibold text-[#3a0208] leading-tight group-hover:text-[#6f0617] transition-colors">
-                    {vendor.name}
-                  </h3>
-                  {vendor.agreedCost ? (
-                    <div className="flex items-baseline gap-1.5 mt-1">
-                      <span className="text-xs text-neutral-500 font-sans">Agreed Contract:</span>
-                      <span className="font-cormorant text-xl font-bold text-[#6f0617]">
-                        {formatINR(vendor.agreedCost)}
-                      </span>
-                    </div>
-                  ) : null}
-                </div>
-
-                {/* Contact Person */}
-                <div className="bg-[#faf7f2] rounded-xl p-3 border border-[#e6bd81]/30 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-[#fdf5ea] border border-[#e6bd81]/50 flex items-center justify-center text-[#85531d] shrink-0 text-xs font-bold">
-                    <User className="w-4 h-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-xs font-bold text-[#3a0208] truncate">
-                      {vendor.contactPerson}
-                    </div>
-                    {vendor.contactRole && (
-                      <div className="text-[11px] text-neutral-500 truncate">
-                        {vendor.contactRole}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Address & Ceremony */}
-                <div className="space-y-1.5 text-xs text-neutral-600">
-                  {vendor.address && (
-                    <div className="flex items-start gap-1.5 text-[11px] text-neutral-500">
-                      <MapPin className="w-3.5 h-3.5 text-[#b88444] shrink-0 mt-0.5" />
-                      <span className="line-clamp-1">{vendor.address}</span>
-                    </div>
-                  )}
-
-                  {vendor.relatedCeremony && (
-                    <div className="flex items-center gap-1.5 text-[11px] text-[#85531d] font-semibold">
-                      <Calendar className="w-3.5 h-3.5 text-[#b88444] shrink-0" />
-                      <span>{vendor.relatedCeremony}</span>
-                    </div>
-                  )}
-
-                  {vendor.notes && (
-                    <p className="text-[11px] text-neutral-500 italic line-clamp-2 pt-1 border-t border-neutral-100">
-                      &ldquo;{vendor.notes}&rdquo;
-                    </p>
-                  )}
-                </div>
-              </div>
-
-              {/* Bottom Quick Action Hotlines */}
-              <div className="pt-3 border-t border-neutral-100 flex items-center justify-between gap-2">
-                
-                {/* Contact triggers */}
-                <div className="flex items-center gap-1.5">
-                  {vendor.phoneNumber && (
-                    <a
-                      href={`tel:${vendor.phoneNumber.replace(/\s+/g, '')}`}
-                      className="p-2 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors shadow-2xs"
-                      title={`Call ${vendor.contactPerson} (${vendor.phoneNumber})`}
-                    >
-                      <Phone className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-
-                  {vendor.phoneNumber && (
-                    <a
-                      href={`https://wa.me/${vendor.phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
-                        `Namaste ${vendor.contactPerson}, regarding the upcoming royal wedding with WeddingOS...`
-                      )}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] border border-[#25D366]/30 transition-colors shadow-2xs"
-                      title="Send WhatsApp Message"
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-
-                  {vendor.email && (
-                    <a
-                      href={`mailto:${vendor.email}`}
-                      className="p-2 rounded-lg bg-[#faf4ec] hover:bg-[#f3e7d6] text-[#6f0617] border border-[#e6bd81]/40 transition-colors shadow-2xs"
-                      title={`Email ${vendor.email}`}
-                    >
-                      <Mail className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-
-                  {vendor.websiteUrl && (
-                    <a
-                      href={vendor.websiteUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors shadow-2xs"
-                      title="Visit Official Website"
-                    >
-                      <Globe className="w-3.5 h-3.5" />
-                    </a>
-                  )}
-                </div>
-
-                {/* Edit & Delete */}
-                <div className="flex items-center gap-1">
-                  <button
-                    type="button"
-                    onClick={() => openEditModal(vendor)}
-                    className="p-2 rounded-lg hover:bg-neutral-100 text-neutral-600 transition-colors cursor-pointer"
-                    title="Edit Partner Details"
-                  >
-                    <Edit2 className="w-3.5 h-3.5 text-[#6f0617]" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(vendor.id, vendor.name)}
-                    className="p-2 rounded-lg hover:bg-red-50 text-neutral-400 hover:text-red-600 transition-colors cursor-pointer"
-                    title="Delete Partner"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-
-              </div>
-
-            </div>
+              <CategoryIcon className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-amber-300' : meta.text}`} />
+              <span>{meta.shortLabel}</span>
+              {count > 0 && (
+                <span
+                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                    isSelected ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-600'
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
           )
         })}
       </div>
 
+      {/* ========================================= */}
+      {/* 4. SEARCH, STATUS FILTER & VIEW TOGGLE    */}
+      {/* ========================================= */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-[#faf7f2] p-3 rounded-2xl border border-[#e6bd81]/30">
+        
+        {/* Search */}
+        <div className="relative flex-1 max-w-md">
+          <Search className="w-4 h-4 text-neutral-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search vendor name, person, city..."
+            className="w-full h-9 pl-9 pr-8 rounded-xl bg-white border border-[#e6bd81]/40 text-xs text-neutral-900 placeholder:text-neutral-400 outline-none focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617] shadow-2xs"
+          />
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm('')}
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+
+        {/* Status Dropdown & View Mode Switcher */}
+        <div className="flex items-center gap-2 shrink-0">
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="h-9 px-3 rounded-xl bg-white border border-[#e6bd81]/40 text-xs font-medium text-neutral-800 outline-none cursor-pointer shadow-2xs"
+          >
+            <option value="all">All Statuses ({vendors.length})</option>
+            <option value="CONFIRMED">Locked ({confirmedCount})</option>
+            <option value="IN_DISCUSSION">Negotiating ({inDiscussionCount})</option>
+            <option value="COMPLETED">Fulfilled</option>
+          </select>
+
+          {/* View Toggle */}
+          <div className="flex items-center bg-white border border-[#e6bd81]/40 rounded-xl p-0.5 shadow-2xs">
+            <button
+              type="button"
+              onClick={() => setViewMode('grid')}
+              className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                viewMode === 'grid' ? 'bg-[#6f0617] text-white shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
+              }`}
+              title="Card Grid View"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('table')}
+              className={`p-1.5 rounded-lg text-xs transition-all cursor-pointer ${
+                viewMode === 'table' ? 'bg-[#6f0617] text-white shadow-xs' : 'text-neutral-500 hover:text-neutral-800'
+              }`}
+              title="Directory Table View"
+            >
+              <List className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* ========================================= */}
+      {/* 5A. VIEW MODE: CARDS GRID (REFINED)       */}
+      {/* ========================================= */}
+      {viewMode === 'grid' && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
+          {filteredVendors.map((vendor) => {
+            const meta = CATEGORY_META[vendor.category] || CATEGORY_META['Other']
+            const CategoryIcon = meta.icon
+            const isNotesExpanded = expandedNotes[vendor.id]
+
+            return (
+              <div
+                key={vendor.id}
+                className="bg-white rounded-2xl border border-[#e6bd81]/40 hover:border-[#b88444]/60 shadow-xs hover:shadow-md transition-all duration-300 p-4 sm:p-5 flex flex-col justify-between group relative overflow-hidden"
+              >
+                {/* Top Subtle Gold Accent Stripe */}
+                <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-transparent via-[#b88444]/40 to-transparent" />
+
+                <div className="space-y-3">
+                  {/* Row 1: Category Tag & Status Badge (ZERO WRAP) */}
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span
+                      className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold tracking-wide ${meta.bg} ${meta.text} border ${meta.border} whitespace-nowrap shrink-0`}
+                    >
+                      <CategoryIcon className="w-3 h-3 shrink-0" />
+                      <span>{vendor.category}</span>
+                    </span>
+
+                    {getStatusBadge(vendor.contractStatus)}
+                  </div>
+
+                  {/* Row 2: Company Name & Compact Rate */}
+                  <div className="flex items-start justify-between gap-2 pt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <h3
+                        className="font-cormorant text-xl sm:text-2xl font-bold text-[#3a0208] leading-tight truncate group-hover:text-[#6f0617] transition-colors"
+                        title={vendor.name}
+                      >
+                        {vendor.name}
+                      </h3>
+
+                      {/* Contact Person & Role */}
+                      <p className="text-xs text-neutral-600 truncate mt-1 flex items-center gap-1.5">
+                        <span className="font-semibold text-neutral-800">{vendor.contactPerson}</span>
+                        {vendor.contactRole && (
+                          <>
+                            <span className="text-neutral-300">•</span>
+                            <span className="text-neutral-500 truncate">{vendor.contactRole}</span>
+                          </>
+                        )}
+                      </p>
+                    </div>
+
+                    {vendor.agreedCost ? (
+                      <div className="text-right shrink-0">
+                        <span
+                          className="inline-block font-sans text-sm sm:text-base font-bold text-[#6f0617] bg-[#fdf5ea] px-2.5 py-0.5 rounded-lg border border-[#e6bd81]/40 whitespace-nowrap tabular-nums"
+                          title={`Agreed Contract: ${formatINR(vendor.agreedCost)}`}
+                        >
+                          {formatCompactINR(vendor.agreedCost)}
+                        </span>
+                        <span className="text-[9px] text-neutral-400 font-medium uppercase tracking-wider block mt-0.5">
+                          Agreed
+                        </span>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  {/* Row 3: Meta Badges (Ceremony & Short City) */}
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                    {vendor.relatedCeremony && (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#faf7f2] border border-[#e6bd81]/30 text-[#85531d] text-[10px] font-medium whitespace-nowrap">
+                        <Calendar className="w-3 h-3 text-[#b88444] shrink-0" />
+                        <span className="truncate max-w-[150px]">{vendor.relatedCeremony}</span>
+                      </span>
+                    )}
+
+                    {vendor.address && (
+                      <span
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-neutral-50 border border-neutral-200 text-neutral-600 text-[10px] font-medium whitespace-nowrap"
+                        title={vendor.address}
+                      >
+                        <MapPin className="w-3 h-3 text-neutral-400 shrink-0" />
+                        <span className="truncate max-w-[140px]">{vendor.address.split(',')[0]}</span>
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Row 4: Expandable Details & Notes (NO WALL OF TEXT!) */}
+                  {(vendor.notes || vendor.address) && (
+                    <div className="pt-1">
+                      <button
+                        type="button"
+                        onClick={() => toggleNotes(vendor.id)}
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#85531d] hover:text-[#6f0617] transition-colors cursor-pointer"
+                      >
+                        <span>{isNotesExpanded ? 'Hide Scope Details' : 'View Scope & Notes'}</span>
+                        <ChevronDown
+                          className={`w-3 h-3 transition-transform duration-200 ${
+                            isNotesExpanded ? 'rotate-180' : ''
+                          }`}
+                        />
+                      </button>
+
+                      {isNotesExpanded && (
+                        <div className="mt-2 p-2.5 rounded-xl bg-[#faf7f2] border border-[#e6bd81]/30 text-xs space-y-1.5 animate-fadeIn">
+                          {vendor.notes && (
+                            <p className="text-[11px] text-neutral-600 italic leading-relaxed">
+                              &ldquo;{vendor.notes}&rdquo;
+                            </p>
+                          )}
+                          {vendor.address && (
+                            <div className="text-[10px] text-neutral-500 pt-1 border-t border-neutral-200/60 flex items-start gap-1">
+                              <MapPin className="w-3 h-3 text-[#b88444] shrink-0 mt-0.5" />
+                              <span>{vendor.address}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Row 5: Action Hotlines Dock */}
+                <div className="pt-3 mt-3 border-t border-neutral-100 flex items-center justify-between gap-1.5 flex-wrap">
+                  <div className="flex items-center gap-1">
+                    {/* Call */}
+                    {vendor.phoneNumber && (
+                      <a
+                        href={`tel:${vendor.phoneNumber.replace(/\s+/g, '')}`}
+                        className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors shadow-2xs"
+                        title={`Call ${vendor.contactPerson} (${vendor.phoneNumber})`}
+                      >
+                        <Phone className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+
+                    {/* WhatsApp */}
+                    {vendor.phoneNumber && (
+                      <a
+                        href={`https://wa.me/${vendor.phoneNumber.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(
+                          `Namaste ${vendor.contactPerson}, regarding the upcoming royal wedding with WeddingOS...`
+                        )}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg bg-[#25D366]/10 hover:bg-[#25D366]/20 text-[#128C7E] border border-[#25D366]/30 transition-colors shadow-2xs"
+                        title="Send WhatsApp Message"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+
+                    {/* Email */}
+                    {vendor.email && (
+                      <a
+                        href={`mailto:${vendor.email}`}
+                        className="p-1.5 rounded-lg bg-[#faf4ec] hover:bg-[#f3e7d6] text-[#6f0617] border border-[#e6bd81]/40 transition-colors shadow-2xs"
+                        title={`Email ${vendor.email}`}
+                      >
+                        <Mail className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+
+                    {/* Website */}
+                    {vendor.websiteUrl && (
+                      <a
+                        href={vendor.websiteUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-neutral-700 transition-colors shadow-2xs"
+                        title="Visit Official Website"
+                      >
+                        <Globe className="w-3.5 h-3.5" />
+                      </a>
+                    )}
+                  </div>
+
+                  {/* Edit & Delete */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(vendor)}
+                      className="p-1.5 rounded-lg hover:bg-[#faf4ec] text-[#6f0617] transition-colors cursor-pointer"
+                      title="Edit Partner Details"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(vendor.id, vendor.name)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 text-neutral-400 hover:text-red-600 transition-colors cursor-pointer"
+                      title="Delete Partner"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {/* ========================================= */}
+      {/* 5B. VIEW MODE: COMPACT DIRECTORY TABLE    */}
+      {/* ========================================= */}
+      {viewMode === 'table' && (
+        <div className="bg-white rounded-2xl border border-[#e6bd81]/40 shadow-xs overflow-hidden">
+          <div className="overflow-x-auto [scrollbar-width:thin]">
+            <table className="w-full text-left text-xs min-w-[760px]">
+              <thead className="bg-[#faf7f2] border-b border-[#e6bd81]/30 text-neutral-600 font-bold uppercase tracking-wider text-[10px]">
+                <tr>
+                  <th className="py-3 px-4">Vendor Partner</th>
+                  <th className="py-3 px-4">Category</th>
+                  <th className="py-3 px-4">Primary Contact</th>
+                  <th className="py-3 px-4">Ceremony</th>
+                  <th className="py-3 px-4">Agreed Value</th>
+                  <th className="py-3 px-4">Status</th>
+                  <th className="py-3 px-4 text-center">Hotlines</th>
+                  <th className="py-3 px-4 text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-neutral-100">
+                {filteredVendors.map((vendor) => {
+                  const meta = CATEGORY_META[vendor.category] || CATEGORY_META['Other']
+                  const CategoryIcon = meta.icon
+                  return (
+                    <tr key={vendor.id} className="hover:bg-[#faf7f2]/50 transition-colors">
+                      <td className="py-3 px-4 font-medium text-neutral-900 font-cormorant text-base">
+                        <div className="font-bold text-[#3a0208]">{vendor.name}</div>
+                        {vendor.address && (
+                          <div className="text-[10px] text-neutral-400 font-sans truncate max-w-xs">{vendor.address}</div>
+                        )}
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${meta.bg} ${meta.text} border ${meta.border} whitespace-nowrap`}>
+                          <CategoryIcon className="w-2.5 h-2.5 shrink-0" />
+                          <span>{vendor.category}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="font-semibold text-neutral-800">{vendor.contactPerson}</div>
+                        <div className="text-[10px] text-neutral-500">{vendor.contactRole || '—'}</div>
+                      </td>
+                      <td className="py-3 px-4 text-neutral-600">
+                        <span className="text-[11px] font-medium text-[#85531d]">{vendor.relatedCeremony || 'All'}</span>
+                      </td>
+                      <td className="py-3 px-4 font-sans text-xs sm:text-sm font-bold text-[#6f0617] whitespace-nowrap tabular-nums">
+                        {vendor.agreedCost ? formatINR(vendor.agreedCost) : '—'}
+                      </td>
+                      <td className="py-3 px-4">
+                        {getStatusBadge(vendor.contractStatus)}
+                      </td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center justify-center gap-1">
+                          {vendor.phoneNumber && (
+                            <a href={`tel:${vendor.phoneNumber.replace(/\s+/g, '')}`} className="p-1.5 rounded-md hover:bg-emerald-50 text-emerald-700" title="Call">
+                              <Phone className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {vendor.phoneNumber && (
+                            <a href={`https://wa.me/${vendor.phoneNumber.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md hover:bg-green-50 text-emerald-600" title="WhatsApp">
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {vendor.email && (
+                            <a href={`mailto:${vendor.email}`} className="p-1.5 rounded-md hover:bg-amber-50 text-[#6f0617]" title="Email">
+                              <Mail className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                          {vendor.websiteUrl && (
+                            <a href={vendor.websiteUrl} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded-md hover:bg-neutral-100 text-neutral-600" title="Website">
+                              <Globe className="w-3.5 h-3.5" />
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <div className="flex items-center justify-end gap-1">
+                          <button type="button" onClick={() => openEditModal(vendor)} className="p-1.5 rounded-md hover:bg-[#faf4ec] text-[#6f0617]" title="Edit">
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button type="button" onClick={() => handleDelete(vendor.id, vendor.name)} className="p-1.5 rounded-md hover:bg-red-50 text-neutral-400 hover:text-red-600" title="Delete">
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Empty State */}
       {filteredVendors.length === 0 && (
-        <div className="bg-white rounded-2xl border border-[#e6bd81]/40 p-12 text-center space-y-3">
+        <div className="bg-white rounded-2xl border border-[#e6bd81]/40 p-10 text-center space-y-3">
           <Building2 className="w-10 h-10 text-neutral-300 mx-auto" />
           <h4 className="text-base font-bold text-neutral-700">No vendor partners found</h4>
           <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-            No partner contacts match your search or filter criteria. Click Add Vendor Partner to onboard caterers, choreographers, or decorators.
+            No partner contacts match your search or filter criteria. Click Add Vendor Partner to onboard suppliers.
           </p>
           <button
             type="button"
@@ -743,7 +1000,7 @@ export default function VendorsPage() {
       )}
 
       {/* ========================================= */}
-      {/* 5. ADD / EDIT VENDOR MODAL DIALOG         */}
+      {/* 6. ADD / EDIT VENDOR MODAL DIALOG         */}
       {/* ========================================= */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -798,7 +1055,7 @@ export default function VendorsPage() {
                     }
                     className="w-full h-10 px-3 rounded-lg border border-neutral-300 bg-white text-xs outline-none cursor-pointer"
                   >
-                    {Object.keys(CATEGORY_THEMES).map((cat) => (
+                    {Object.keys(CATEGORY_META).map((cat) => (
                       <option key={cat} value={cat}>
                         {cat}
                       </option>

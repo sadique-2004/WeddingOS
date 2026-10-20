@@ -108,8 +108,10 @@ function calculateTimeLeft(dateString: string) {
 
 export default function PublicWeddingPage({
   previewConfig,
+  isMobileView,
 }: {
   previewConfig?: PublicWebsiteConfig
+  isMobileView?: boolean
 }) {
   const { slug } = useParams()
   const [config, setConfig] = useState<PublicWebsiteConfig>(() => {
@@ -124,6 +126,23 @@ export default function PublicWeddingPage({
   })
 
   const [copiedLink, setCopiedLink] = useState(false)
+
+  // Responsive window width detector for real devices
+  const [isWindowMobile, setIsWindowMobile] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768
+    }
+    return false
+  })
+
+  useEffect(() => {
+    const check = () => setIsWindowMobile(window.innerWidth < 768)
+    window.addEventListener('resize', check)
+    return () => window.removeEventListener('resize', check)
+  }, [])
+
+  // Explicit prop overrides window measurement (crucial for Studio mobile phone frame preview)
+  const isMobile = isMobileView !== undefined ? isMobileView : isWindowMobile
 
   // Real-time dynamic countdown state (Seconds live ticking)
   const [countdown, setCountdown] = useState(() => calculateTimeLeft(config.weddingDate))
@@ -225,210 +244,332 @@ export default function PublicWeddingPage({
 
   return (
     <div className={`min-h-screen ${themeStyles.bodyBg} font-sans antialiased transition-colors duration-500 overflow-x-hidden w-full`}>
-      
+
       {/* ======================================================== */}
-      {/* 1. HERO BANNER (100% VIEWPORT HEIGHT & WIDTH - RESPONSIVE) */}
+      {/* 1. HERO BANNER (100% VIEWPORT HEIGHT & WIDTH)             */}
       {/* ======================================================== */}
       <section className="relative w-full h-screen min-h-screen flex flex-col items-center justify-center text-center px-3 sm:px-6 overflow-hidden">
-        {/* Full Bleed High-Res Cover Image */}
-        <img
-          src={config.coverPhoto || '/events/pheras.jpg'}
-          alt="Royal Wedding Celebration"
-          className="absolute inset-0 w-full h-full object-cover object-center scale-105 transition-transform duration-1000 ease-out"
-        />
+        {/* Cover Image Container */}
+        <div className="absolute inset-0 w-full h-full overflow-hidden pointer-events-none">
+          {/* Ambient blurred backdrop for Mobile (fills 100% height with matching royal warmth) */}
+          {isMobile && (
+            <img
+              src={config.coverPhoto || '/events/pheras.jpg'}
+              alt=""
+              className="w-full h-full object-cover blur-3xl opacity-50 scale-110"
+            />
+          )}
+
+          {/* Main Cover Image: FULL uncropped image on Mobile (object-contain), Full-bleed on Desktop (object-cover) */}
+          <img
+            src={config.coverPhoto || '/events/pheras.jpg'}
+            alt="Royal Wedding Celebration"
+            className={`w-full h-full transition-all duration-700 ${isMobile
+                ? 'object-contain object-center scale-100'
+                : 'object-cover object-center scale-105'
+              }`}
+          />
+        </div>
 
         {/* Cinematic Backdrop Overlays */}
-        <div className={`absolute inset-0 bg-gradient-to-t ${themeStyles.heroGradient}`} />
-        <div className="absolute inset-0 bg-radial from-transparent via-black/35 to-black/70 pointer-events-none" />
+        <div className={`absolute inset-0 ${isMobile ? 'bg-gradient-to-t from-black/85 via-black/40 to-black/20' : `bg-gradient-to-t ${themeStyles.heroGradient}`}`} />
+        <div className="absolute inset-0 bg-radial from-transparent via-black/25 to-black/60 pointer-events-none" />
 
-        {/* Hero Content Container */}
-        <div className="relative z-10 w-full max-w-sm sm:max-w-xl md:max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-2 pb-14 text-white px-2 sm:px-4">
-          
-          {/* Subtle Royal Crest Pill */}
-          <div className={`inline-flex items-center gap-1.5 px-3 py-1 sm:px-4 sm:py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[10px] sm:text-xs uppercase tracking-wider font-semibold ${themeStyles.heroSubtitle} shadow-lg max-w-[92vw] truncate`}>
-            <Sparkles className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#e6bd81] shrink-0" />
-            <span className="truncate">The Wedding Celebration Of</span>
-          </div>
-
-          {/* Couple Names Headline - Fully Responsive */}
-          <h1 className={`${themeStyles.fontHead} text-3xl sm:text-5xl md:text-7xl lg:text-8xl font-normal leading-tight tracking-tight drop-shadow-xl text-white text-center break-words w-full`}>
-            {config.brideName} &amp; {config.groomName}
-          </h1>
-
-          {/* Date & Royal Destination Venue - Responsive Stacking */}
-          <div className="text-xs sm:text-base text-white/95 font-sans max-w-xl mx-auto flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 drop-shadow-md px-2 text-center">
-            <span className="flex items-center gap-1.5 font-medium shrink-0">
-              <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#e6bd81]" />
-              <span>{new Date(config.weddingDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
-            </span>
-            <span className="hidden sm:inline text-white/60">&bull;</span>
-            <span className="flex items-center gap-1.5 font-medium text-center">
-              <MapPin className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#e6bd81] shrink-0" />
-              <span className="truncate max-w-[280px] sm:max-w-none">{config.locationName}</span>
-            </span>
-          </div>
-
-          {/* ======================================================== */}
-          {/* REAL-TIME CALENDAR PAGE FLIP COUNTDOWN (ONE UNIFIED DIV)  */}
-          {/* ======================================================== */}
-          <div className="pt-1 sm:pt-2 w-full flex flex-col items-center">
-            <style>{`
-              @keyframes calendarPageFlip {
-                0% {
-                  transform: perspective(400px) rotateX(-90deg);
-                  opacity: 0.15;
-                }
-                60% {
-                  transform: perspective(400px) rotateX(12deg);
-                  opacity: 0.95;
-                }
-                100% {
-                  transform: perspective(400px) rotateX(0deg);
-                  opacity: 1;
-                }
-              }
-              .animate-calendar-page-flip {
-                animation: calendarPageFlip 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.2) forwards;
-                transform-origin: top center;
-                backface-visibility: hidden;
-              }
-            `}</style>
-
-            <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-[9px] sm:text-[10px] text-white/90 font-medium mb-2.5 sm:mb-3">
-              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span>Live Ceremonial Countdown</span>
+        {/* -------------------------------------------------------- */}
+        {/* DESKTOP HERO CONTENT (!isMobile - UNTOUCHED GRAND SCALE) */}
+        {/* -------------------------------------------------------- */}
+        {!isMobile && (
+          <div className="relative z-10 w-full max-w-4xl mx-auto space-y-6 pt-4 pb-12 text-white px-4">
+            {/* Subtle Royal Crest Pill */}
+            <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-xs uppercase tracking-widest font-semibold ${themeStyles.heroSubtitle} shadow-lg`}>
+              <Sparkles className="w-3.5 h-3.5 text-[#e6bd81]" />
+              <span>The Wedding Celebration Of</span>
             </div>
 
-            {/* ONE SINGLE UNIFIED DIVISION CONTAINER (FITS 100% MOBILE SCREENS) */}
-            <div className="w-full flex justify-center px-1">
-              <div className="inline-flex items-center bg-black/75 backdrop-blur-2xl p-1 sm:p-2.5 rounded-2xl sm:rounded-3xl border border-white/25 shadow-2xl divide-x divide-white/15 max-w-full">
-                
-                {/* 1. Days Sub-Division */}
-                <div className="flex flex-col items-center px-1.5 sm:px-3 md:px-4 py-1 sm:py-2 select-none">
-                  <div className="relative w-12 sm:w-16 md:w-20 h-13 sm:h-18 md:h-22 rounded-lg sm:rounded-2xl bg-gradient-to-b from-[#4a0713] to-[#2b0209] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
-                    <div className="flex items-center justify-between px-1.5 sm:px-2.5 pt-1 sm:pt-1.5 z-20">
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                    </div>
-                    <div
-                      key={countdown.days}
-                      className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none"
-                    >
-                      <span className="font-sans font-bold text-lg sm:text-3xl md:text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
-                        {String(countdown.days).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
-                    <div className="h-1 sm:h-1.5 w-full bg-black/30" />
-                  </div>
-                  <span className="mt-1 sm:mt-2 font-sans text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-neutral-300 uppercase">
-                    Days
-                  </span>
-                </div>
+            {/* Couple Names Headline - Large & Grand */}
+            <h1 className={`${themeStyles.fontHead} text-6xl md:text-7xl lg:text-8xl font-normal leading-tight tracking-tight drop-shadow-xl text-white text-center`}>
+              {config.brideName} &amp; {config.groomName}
+            </h1>
 
-                {/* 2. Hours Sub-Division */}
-                <div className="flex flex-col items-center px-1.5 sm:px-3 md:px-4 py-1 sm:py-2 select-none">
-                  <div className="relative w-12 sm:w-16 md:w-20 h-13 sm:h-18 md:h-22 rounded-lg sm:rounded-2xl bg-gradient-to-b from-[#5c0b19] to-[#36030c] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
-                    <div className="flex items-center justify-between px-1.5 sm:px-2.5 pt-1 sm:pt-1.5 z-20">
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                    </div>
-                    <div
-                      key={countdown.hours}
-                      className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none"
-                    >
-                      <span className="font-sans font-bold text-lg sm:text-3xl md:text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
-                        {String(countdown.hours).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
-                    <div className="h-1 sm:h-1.5 w-full bg-black/30" />
-                  </div>
-                  <span className="mt-1 sm:mt-2 font-sans text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-neutral-300 uppercase">
-                    Hours
-                  </span>
-                </div>
+            {/* Date & Destination Venue - Single Horizontal Line with Bullet */}
+            <div className="flex items-center justify-center gap-3 text-lg text-white/95 font-sans font-medium drop-shadow-md">
+              <span className="flex items-center gap-1.5">
+                <Calendar className="w-4 h-4 text-[#e6bd81]" />
+                <span>{new Date(config.weddingDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+              </span>
+              <span className="text-white/60">&bull;</span>
+              <span className="flex items-center gap-1.5">
+                <MapPin className="w-4 h-4 text-[#e6bd81]" />
+                <span>{config.locationName}</span>
+              </span>
+            </div>
 
-                {/* 3. Minutes Sub-Division */}
-                <div className="flex flex-col items-center px-1.5 sm:px-3 md:px-4 py-1 sm:py-2 select-none">
-                  <div className="relative w-12 sm:w-16 md:w-20 h-13 sm:h-18 md:h-22 rounded-lg sm:rounded-2xl bg-gradient-to-b from-[#6e1020] to-[#42040f] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
-                    <div className="flex items-center justify-between px-1.5 sm:px-2.5 pt-1 sm:pt-1.5 z-20">
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
-                    </div>
-                    <div
-                      key={countdown.minutes}
-                      className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none"
-                    >
-                      <span className="font-sans font-bold text-lg sm:text-3xl md:text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
-                        {String(countdown.minutes).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
-                    <div className="h-1 sm:h-1.5 w-full bg-black/30" />
-                  </div>
-                  <span className="mt-1 sm:mt-2 font-sans text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-neutral-300 uppercase">
-                    Mins
-                  </span>
-                </div>
+            {/* Large Desktop Real-time Countdown */}
+            <div className="pt-2">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-black/40 backdrop-blur-md border border-white/15 text-[10px] text-white/90 font-medium mb-3">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Live Ceremonial Countdown</span>
+              </div>
 
-                {/* 4. Seconds Sub-Division */}
-                <div className="flex flex-col items-center px-1.5 sm:px-3 md:px-4 py-1 sm:py-2 select-none">
-                  <div className="relative w-12 sm:w-16 md:w-20 h-13 sm:h-18 md:h-22 rounded-lg sm:rounded-2xl bg-gradient-to-b from-[#8b162a] to-[#540614] shadow-inner border border-amber-400/40 ring-1 ring-amber-400/30 flex flex-col justify-between overflow-hidden">
-                    <div className="flex items-center justify-between px-1.5 sm:px-2.5 pt-1 sm:pt-1.5 z-20">
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
-                      <span className="w-1 h-1 sm:w-1.5 sm:h-1.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
+              <div className="flex justify-center">
+                <div className="inline-flex items-center bg-black/70 backdrop-blur-2xl p-2.5 rounded-3xl border border-white/25 shadow-2xl divide-x divide-white/15">
+                  {/* Days */}
+                  <div className="flex flex-col items-center px-4 py-2 select-none">
+                    <div className="relative w-20 h-22 rounded-2xl bg-gradient-to-b from-[#4a0713] to-[#2b0209] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-2.5 pt-1.5 z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.days} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
+                          {String(countdown.days).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-1.5 w-full bg-black/30" />
                     </div>
-                    <div
-                      key={countdown.seconds}
-                      className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none"
-                    >
-                      <span className="font-sans font-bold text-lg sm:text-3xl md:text-4xl text-amber-300 tracking-tight tabular-nums drop-shadow-md">
-                        {String(countdown.seconds).padStart(2, '0')}
-                      </span>
-                    </div>
-                    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-amber-300/20 z-10" />
-                    <div className="h-1 sm:h-1.5 w-full bg-black/30" />
+                    <span className="mt-2 font-sans text-xs font-bold tracking-wider text-neutral-300 uppercase">Days</span>
                   </div>
-                  <span className="mt-1 sm:mt-2 font-sans text-[8px] sm:text-[10px] md:text-xs font-bold tracking-wider text-amber-300 uppercase">
-                    Secs
-                  </span>
-                </div>
 
+                  {/* Hours */}
+                  <div className="flex flex-col items-center px-4 py-2 select-none">
+                    <div className="relative w-20 h-22 rounded-2xl bg-gradient-to-b from-[#5c0b19] to-[#36030c] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-2.5 pt-1.5 z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.hours} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
+                          {String(countdown.hours).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-1.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-2 font-sans text-xs font-bold tracking-wider text-neutral-300 uppercase">Hours</span>
+                  </div>
+
+                  {/* Minutes */}
+                  <div className="flex flex-col items-center px-4 py-2 select-none">
+                    <div className="relative w-20 h-22 rounded-2xl bg-gradient-to-b from-[#6e1020] to-[#42040f] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-2.5 pt-1.5 z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.minutes} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-4xl text-white tracking-tight tabular-nums drop-shadow-md">
+                          {String(countdown.minutes).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-1.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-2 font-sans text-xs font-bold tracking-wider text-neutral-300 uppercase">Mins</span>
+                  </div>
+
+                  {/* Seconds */}
+                  <div className="flex flex-col items-center px-4 py-2 select-none">
+                    <div className="relative w-20 h-22 rounded-2xl bg-gradient-to-b from-[#8b162a] to-[#540614] shadow-inner border border-amber-400/40 ring-1 ring-amber-400/30 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-2.5 pt-1.5 z-20">
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.seconds} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-4xl text-amber-300 tracking-tight tabular-nums drop-shadow-md">
+                          {String(countdown.seconds).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-amber-300/20 z-10" />
+                      <div className="h-1.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-2 font-sans text-xs font-bold tracking-wider text-amber-300 uppercase">Secs</span>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Action CTAs - Responsive Flex */}
-          <div className="pt-2 sm:pt-3 flex items-center justify-center gap-2.5 sm:gap-3 flex-wrap w-full">
-            <a
-              href="#story"
-              className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-full bg-[#6f0617] hover:bg-[#540411] text-white text-xs sm:text-sm font-semibold shadow-xl transition-all hover:scale-105 flex items-center gap-1.5"
-            >
-              <span>Explore Celebrations</span>
-              <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-            </a>
-            <button
-              type="button"
-              onClick={handleCopyShare}
-              className="px-4 py-2.5 sm:px-5 sm:py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-xs sm:text-sm font-semibold transition-all flex items-center gap-1.5 shadow-lg"
-            >
-              {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" /> : <Share2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-              <span>{copiedLink ? 'Link Copied!' : 'Share Portal'}</span>
-            </button>
+            {/* Desktop CTAs */}
+            <div className="pt-3 flex items-center justify-center gap-3">
+              <a href="#story" className="px-6 py-3 rounded-full bg-[#6f0617] hover:bg-[#540411] text-white text-sm font-semibold shadow-xl transition-all hover:scale-105 flex items-center gap-1.5">
+                <span>Explore Celebrations</span>
+                <ChevronDown className="w-4 h-4" />
+              </a>
+              <button type="button" onClick={handleCopyShare} className="px-5 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-sm font-semibold transition-all flex items-center gap-1.5 shadow-lg">
+                {copiedLink ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
+                <span>{copiedLink ? 'Link Copied!' : 'Share Portal'}</span>
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
+        {/* -------------------------------------------------------- */}
+        {/* MOBILE HERO CONTENT (isMobile - CLEAN, FITTED & SHORT)   */}
+        {/* -------------------------------------------------------- */}
+        {isMobile && (
+          <div className="relative z-10 w-full max-w-[340px] mx-auto flex flex-col justify-between h-full py-3 text-white px-2">
+
+            {/* Top Block: Mobile Badge, Couple Names, Date & Venue */}
+            <div className="space-y-1.5 text-center shrink-0">
+              <div className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md border border-white/20 text-[9px] uppercase tracking-wider font-semibold text-[#e6bd81] shadow-xs">
+                <Sparkles className="w-2.5 h-2.5 text-[#e6bd81]" />
+                <span>The Wedding Celebration Of</span>
+              </div>
+
+              {/* Mobile Couple Names - TIGHT SPACING, NO GAP */}
+              <div className="text-center py-0.5">
+                <h1 className={`${themeStyles.fontHead} text-3xl font-bold leading-tight tracking-normal text-white text-center`}>
+                  <span>{config.brideName}</span>
+                  <span className="text-[#e6bd81] font-light text-xl mx-1.5">&amp;</span>
+                  <span>{config.groomName}</span>
+                </h1>
+              </div>
+
+              {/* Mobile Date & Venue: TWO CLEAN SEPARATE LINES (NO BULLET) */}
+              <div className="space-y-0.5 text-center font-sans text-xs text-white/90">
+                {/* Line 1: Date */}
+                <div className="flex items-center justify-center gap-1 font-medium">
+                  <Calendar className="w-3.5 h-3.5 text-[#e6bd81] shrink-0" />
+                  <span>{new Date(config.weddingDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                </div>
+                {/* Line 2: Venue */}
+                <div className="flex items-center justify-center gap-1 font-medium text-white/80">
+                  <MapPin className="w-3.5 h-3.5 text-[#e6bd81] shrink-0" />
+                  <span className="truncate max-w-[260px]">{config.locationName}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Center Block: THE FULL UNCROPPED ROYAL WEDDING PHOTO SHOWCASE */}
+            <div className="w-full my-auto py-1">
+              <div className="relative w-full aspect-[16/10] max-h-[220px] rounded-2xl overflow-hidden border-2 border-[#e6bd81]/70 shadow-[0_12px_32px_rgba(0,0,0,0.7)] ring-1 ring-white/10 group bg-black/40">
+                <img
+                  src={config.coverPhoto && config.coverPhoto.trim() !== '' ? config.coverPhoto : '/events/pheras.jpg'}
+                  alt={`${config.brideName} & ${config.groomName} Wedding`}
+                  className="w-full h-full object-cover object-center"
+                  onError={(e) => {
+                    ;(e.currentTarget as HTMLImageElement).src = '/events/pheras.jpg'
+                  }}
+                />
+                {/* Royal Corner Filigree Accents */}
+                <div className="absolute top-2 left-2 w-3.5 h-3.5 border-t-2 border-l-2 border-[#e6bd81] rounded-tl-xs pointer-events-none shadow-sm" />
+                <div className="absolute top-2 right-2 w-3.5 h-3.5 border-t-2 border-r-2 border-[#e6bd81] rounded-tr-xs pointer-events-none shadow-sm" />
+                <div className="absolute bottom-2 left-2 w-3.5 h-3.5 border-b-2 border-l-2 border-[#e6bd81] rounded-bl-xs pointer-events-none shadow-sm" />
+                <div className="absolute bottom-2 right-2 w-3.5 h-3.5 border-b-2 border-r-2 border-[#e6bd81] rounded-br-xs pointer-events-none shadow-sm" />
+                {/* Subtle depth vignette */}
+                <div className="absolute inset-x-0 bottom-0 h-10 bg-gradient-to-t from-black/40 to-transparent pointer-events-none" />
+              </div>
+            </div>
+
+            {/* Bottom Block: Mobile Short Timer & CTAs (COMPACT, SHORT HEIGHT, FITS ANY PHONE) */}
+            <div className="space-y-2 shrink-0 pt-1">
+              <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-black/50 backdrop-blur-md border border-white/15 text-[8px] text-white/90 font-medium">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span>Live Countdown</span>
+              </div>
+
+              {/* Short Unified Container */}
+              <div className="flex justify-center">
+                <div className="inline-flex items-center bg-black/80 backdrop-blur-xl p-1 rounded-xl border border-white/20 shadow-xl divide-x divide-white/10">
+                  {/* Days (Short) */}
+                  <div className="flex flex-col items-center px-1.5 py-0.5 select-none">
+                    <div className="relative w-8 h-9 rounded-md bg-gradient-to-b from-[#4a0713] to-[#2b0209] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-1 pt-0.5 z-20">
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.days} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-xs text-white tracking-tight tabular-nums">
+                          {String(countdown.days).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-0.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-0.5 font-sans text-[7px] font-bold text-neutral-300 uppercase">Days</span>
+                  </div>
+
+                  {/* Hours (Short) */}
+                  <div className="flex flex-col items-center px-1.5 py-0.5 select-none">
+                    <div className="relative w-8 h-9 rounded-md bg-gradient-to-b from-[#5c0b19] to-[#36030c] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-1 pt-0.5 z-20">
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.hours} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-xs text-white tracking-tight tabular-nums">
+                          {String(countdown.hours).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-0.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-0.5 font-sans text-[7px] font-bold text-neutral-300 uppercase">Hours</span>
+                  </div>
+
+                  {/* Mins (Short) */}
+                  <div className="flex flex-col items-center px-1.5 py-0.5 select-none">
+                    <div className="relative w-8 h-9 rounded-md bg-gradient-to-b from-[#6e1020] to-[#42040f] shadow-inner border border-white/20 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-1 pt-0.5 z-20">
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                        <span className="w-0.5 h-0.5 rounded-full bg-white/40 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.minutes} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-xs text-white tracking-tight tabular-nums">
+                          {String(countdown.minutes).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-white/15 z-10" />
+                      <div className="h-0.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-0.5 font-sans text-[7px] font-bold text-neutral-300 uppercase">Mins</span>
+                  </div>
+
+                  {/* Secs (Short) */}
+                  <div className="flex flex-col items-center px-1.5 py-0.5 select-none">
+                    <div className="relative w-8 h-9 rounded-md bg-gradient-to-b from-[#8b162a] to-[#540614] shadow-inner border border-amber-400/40 ring-1 ring-amber-400/30 flex flex-col justify-between overflow-hidden">
+                      <div className="flex items-center justify-between px-1 pt-0.5 z-20">
+                        <span className="w-0.5 h-0.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
+                        <span className="w-0.5 h-0.5 rounded-full bg-amber-300/60 ring-1 ring-black/40" />
+                      </div>
+                      <div key={countdown.seconds} className="animate-calendar-page-flip absolute inset-0 flex items-center justify-center pointer-events-none">
+                        <span className="font-sans font-bold text-xs text-amber-300 tracking-tight tabular-nums">
+                          {String(countdown.seconds).padStart(2, '0')}
+                        </span>
+                      </div>
+                      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 h-[1px] bg-black/60 border-b border-amber-300/20 z-10" />
+                      <div className="h-0.5 w-full bg-black/30" />
+                    </div>
+                    <span className="mt-0.5 font-sans text-[7px] font-bold text-amber-300 uppercase">Secs</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Mobile Buttons */}
+              <div className="pt-0.5 flex items-center justify-center gap-2">
+                <a href="#story" className="px-4 py-1.5 rounded-full bg-[#6f0617] text-white text-[10px] font-semibold shadow-md flex items-center gap-1">
+                  <span>Explore</span>
+                  <ChevronDown className="w-3 h-3" />
+                </a>
+                <button type="button" onClick={handleCopyShare} className="px-3.5 py-1.5 rounded-full bg-white/20 backdrop-blur-md border border-white/30 text-white text-[10px] font-semibold flex items-center gap-1">
+                  {copiedLink ? <CheckCircle2 className="w-3 h-3 text-emerald-400" /> : <Share2 className="w-3 h-3" />}
+                  <span>{copiedLink ? 'Copied' : 'Share'}</span>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        )}
 
         {/* Animated Bouncing Scroll Indicator at exact bottom of 100vh */}
         <a
           href="#story"
           aria-label="Scroll to read wedding story"
-          className="absolute bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-1 text-white/70 hover:text-[#e6bd81] transition-colors animate-bounce cursor-pointer select-none"
+          className="absolute bottom-2 sm:bottom-4 left-1/2 -translate-x-1/2 z-20 flex flex-col items-center gap-0.5 text-white/70 hover:text-[#e6bd81] transition-colors animate-bounce cursor-pointer select-none"
         >
-          <span className="text-[9px] sm:text-[10px] uppercase font-bold tracking-widest text-[#e6bd81] drop-shadow-sm">
+          <span className="text-[7px] sm:text-[9px] uppercase font-bold tracking-widest text-[#e6bd81] drop-shadow-sm">
             Scroll to explore
           </span>
-          <ChevronDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#e6bd81]" />
+          <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-[#e6bd81]" />
         </a>
       </section>
 
@@ -486,162 +627,164 @@ export default function PublicWeddingPage({
                 }}
               >
                 {/* ------------------------------------------------------------- */}
-                {/* MOBILE VIEW (< md): IMAGE ON TOP, CONTENT ON BOTTOM           */}
+                {/* MOBILE VIEW: IMAGE ON TOP, CONTENT ON BOTTOM                  */}
                 {/* ------------------------------------------------------------- */}
-                <div className="block md:hidden">
-                  {/* Top: Ceremony Photo with Overlaid Tags */}
-                  <div className="relative w-full h-52 sm:h-60 overflow-hidden bg-neutral-900">
-                    <img
-                      src={event.image}
-                      alt={event.name}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+                {isMobile ? (
+                  <div>
+                    {/* Top: Ceremony Photo with Overlaid Tags */}
+                    <div className="relative w-full h-48 sm:h-56 overflow-hidden bg-neutral-900">
+                      <img
+                        src={event.image}
+                        alt={event.name}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
 
-                    {/* Top Badges on Mobile Image */}
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                      <span className="px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/30 text-[#e6bd81] text-[10px] font-bold tracking-wider uppercase">
-                        Part 0{index + 1}
-                      </span>
-                      <span className="px-2.5 py-0.5 rounded-full bg-[#6f0617] text-white text-[10px] font-bold tracking-wider uppercase shadow-xs">
-                        {event.dayLabel}
-                      </span>
+                      {/* Top Badges on Mobile Image */}
+                      <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
+                        <span className="px-2.5 py-0.5 rounded-full bg-black/60 backdrop-blur-md border border-white/30 text-[#e6bd81] text-[10px] font-bold tracking-wider uppercase">
+                          Part 0{index + 1}
+                        </span>
+                        <span className="px-2.5 py-0.5 rounded-full bg-[#6f0617] text-white text-[10px] font-bold tracking-wider uppercase shadow-xs">
+                          {event.dayLabel}
+                        </span>
+                      </div>
+
+                      {/* Bottom Date strip on image */}
+                      <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs">
+                        <span className="font-semibold text-[#e6bd81] text-[11px] drop-shadow-sm">
+                          {event.date}
+                        </span>
+                      </div>
                     </div>
 
-                    {/* Bottom Date strip on image */}
-                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-white text-xs">
-                      <span className="font-semibold text-[#e6bd81] text-[11px] drop-shadow-sm">
-                        {event.date}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Bottom: Ceremonial Details & Venues on Mobile */}
-                  <div className="p-4 sm:p-6 space-y-3">
-                    <div className="flex items-center gap-1.5 text-xs font-semibold text-[#b88444]">
-                      <Clock className="w-3.5 h-3.5 shrink-0" />
-                      <span>{event.time}</span>
-                    </div>
-
-                    <h3 className={`${themeStyles.fontHead} text-2xl font-bold leading-tight ${isDarkTheme ? 'text-white' : 'text-[#3a0208]'}`}>
-                      {event.name}
-                    </h3>
-
-                    <p className={`text-xs leading-relaxed font-sans ${isDarkTheme ? 'text-neutral-300' : 'text-neutral-600'}`}>
-                      {event.description}
-                    </p>
-
-                    <div className="pt-2 space-y-2 border-t border-neutral-100 dark:border-neutral-800">
-                      {/* Venue on Mobile */}
-                      {config.showVenues && (
-                        <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${isDarkTheme ? 'bg-neutral-800/80 border-neutral-700 text-white' : 'bg-[#faf7f2] border-[#e6bd81]/30 text-neutral-800'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <MapPin className="w-4 h-4 text-[#6f0617] shrink-0" />
-                            <span className="font-medium truncate text-[11px]">{event.venue}</span>
-                          </div>
-                          <a
-                            href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
-                          >
-                            <span>Map</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
-                      )}
-
-                      {/* Dress Code on Mobile */}
-                      {config.showDressCode && (
-                        <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200">
-                          <Shirt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-900 shrink-0">Dress:</span>
-                          <span className="text-[11px] font-medium truncate">{event.dressCode}</span>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {/* ------------------------------------------------------------- */}
-                {/* DESKTOP VIEW (md:): REGAL SPLIT-CARD (PHOTO LEFT, DETAILS RIGHT)*/}
-                {/* ------------------------------------------------------------- */}
-                <div className={`hidden md:grid md:grid-cols-12 gap-0 overflow-hidden`}>
-                  {/* Event Photo (5 cols) */}
-                  <div className="md:col-span-5 relative min-h-[300px] overflow-hidden bg-neutral-900">
-                    <img
-                      src={event.image}
-                      alt={event.name}
-                      className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
-                    
-                    {/* Sequence pill */}
-                    <div className="absolute top-3 left-3">
-                      <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/30 text-white text-[10px] font-bold tracking-wider uppercase">
-                        Part 0{index + 1}
-                      </span>
-                    </div>
-
-                    {/* Day Label on photo */}
-                    <div className="absolute bottom-3 left-3 right-3 text-white space-y-0.5">
-                      <span className="text-[11px] font-bold text-[#e6bd81] uppercase tracking-wider block">
-                        {event.dayLabel}
-                      </span>
-                      <span className="text-xs text-white/90 font-medium">
-                        {event.date}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Event Details (7 cols) */}
-                  <div className="md:col-span-7 p-7 lg:p-8 flex flex-col justify-between space-y-4">
-                    <div className="space-y-3">
-                      <div className="flex items-center gap-2 text-xs font-semibold text-[#b88444]">
-                        <Clock className="w-3.5 h-3.5" />
+                    {/* Bottom: Ceremonial Details & Venues on Mobile */}
+                    <div className="p-4 sm:p-6 space-y-3">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-[#b88444]">
+                        <Clock className="w-3.5 h-3.5 shrink-0" />
                         <span>{event.time}</span>
                       </div>
 
-                      <h3 className={`${themeStyles.fontHead} text-2xl sm:text-3xl font-semibold leading-tight ${isDarkTheme ? 'text-white' : 'text-[#3a0208]'}`}>
+                      <h3 className={`${themeStyles.fontHead} text-2xl font-bold leading-tight ${isDarkTheme ? 'text-white' : 'text-[#3a0208]'}`}>
                         {event.name}
                       </h3>
 
-                      <p className={`text-xs sm:text-sm leading-relaxed ${isDarkTheme ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                      <p className={`text-xs leading-relaxed font-sans ${isDarkTheme ? 'text-neutral-300' : 'text-neutral-600'}`}>
                         {event.description}
                       </p>
-                    </div>
 
-                    <div className="space-y-3 pt-3 border-t border-neutral-100">
-                      {/* Venue */}
-                      {config.showVenues && (
-                        <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${isDarkTheme ? 'bg-neutral-800/60 border-neutral-700 text-white' : 'bg-[#faf7f2] border-[#e6bd81]/30 text-neutral-800'}`}>
-                          <div className="flex items-center gap-2 min-w-0">
-                            <MapPin className="w-4 h-4 text-[#6f0617] shrink-0" />
-                            <span className="font-semibold truncate">{event.venue}</span>
+                      <div className="pt-2 space-y-2 border-t border-neutral-100 dark:border-neutral-800">
+                        {/* Venue on Mobile */}
+                        {config.showVenues && (
+                          <div className={`p-2.5 rounded-xl border flex items-center justify-between gap-2 text-xs ${isDarkTheme ? 'bg-neutral-800/80 border-neutral-700 text-white' : 'bg-[#faf7f2] border-[#e6bd81]/30 text-neutral-800'}`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <MapPin className="w-4 h-4 text-[#6f0617] shrink-0" />
+                              <span className="font-medium truncate text-[11px]">{event.venue}</span>
+                            </div>
+                            <a
+                              href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
+                            >
+                              <span>Map</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
                           </div>
-                          <a
-                            href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
-                          >
-                            <span>Directions</span>
-                            <ExternalLink className="w-3 h-3" />
-                          </a>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Dress Code */}
-                      {config.showDressCode && (
-                        <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-xl border border-emerald-200">
-                          <Shirt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
-                          <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-900">Dress:</span>
-                          <span className="text-[11px] font-medium">{event.dressCode}</span>
-                        </div>
-                      )}
+                        {/* Dress Code on Mobile */}
+                        {config.showDressCode && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1.5 rounded-xl border border-emerald-200">
+                            <Shirt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-900 shrink-0">Dress:</span>
+                            <span className="text-[11px] font-medium truncate">{event.dressCode}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
+                ) : (
+                  /* ------------------------------------------------------------- */
+                  /* DESKTOP VIEW: REGAL SPLIT-CARD (PHOTO LEFT, DETAILS RIGHT)    */
+                  /* ------------------------------------------------------------- */
+                  <div className="grid grid-cols-12 gap-0 overflow-hidden">
+                    {/* Event Photo (5 cols) */}
+                    <div className="col-span-5 relative min-h-[300px] overflow-hidden bg-neutral-900">
+                      <img
+                        src={event.image}
+                        alt={event.name}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-700 ease-out"
+                      />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/25 to-transparent" />
+
+                      {/* Sequence pill */}
+                      <div className="absolute top-3 left-3">
+                        <span className="px-3 py-1 rounded-full bg-black/60 backdrop-blur-md border border-white/30 text-white text-[10px] font-bold tracking-wider uppercase">
+                          Part 0{index + 1}
+                        </span>
+                      </div>
+
+                      {/* Day Label on photo */}
+                      <div className="absolute bottom-3 left-3 right-3 text-white space-y-0.5">
+                        <span className="text-[11px] font-bold text-[#e6bd81] uppercase tracking-wider block">
+                          {event.dayLabel}
+                        </span>
+                        <span className="text-xs text-white/90 font-medium">
+                          {event.date}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Event Details (7 cols) */}
+                    <div className="col-span-7 p-7 lg:p-8 flex flex-col justify-between space-y-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-[#b88444]">
+                          <Clock className="w-3.5 h-3.5" />
+                          <span>{event.time}</span>
+                        </div>
+
+                        <h3 className={`${themeStyles.fontHead} text-2xl sm:text-3xl font-semibold leading-tight ${isDarkTheme ? 'text-white' : 'text-[#3a0208]'}`}>
+                          {event.name}
+                        </h3>
+
+                        <p className={`text-xs sm:text-sm leading-relaxed ${isDarkTheme ? 'text-neutral-300' : 'text-neutral-600'}`}>
+                          {event.description}
+                        </p>
+                      </div>
+
+                      <div className="space-y-3 pt-3 border-t border-neutral-100">
+                        {/* Venue */}
+                        {config.showVenues && (
+                          <div className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${isDarkTheme ? 'bg-neutral-800/60 border-neutral-700 text-white' : 'bg-[#faf7f2] border-[#e6bd81]/30 text-neutral-800'}`}>
+                            <div className="flex items-center gap-2 min-w-0">
+                              <MapPin className="w-4 h-4 text-[#6f0617] shrink-0" />
+                              <span className="font-semibold truncate">{event.venue}</span>
+                            </div>
+                            <a
+                              href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
+                            >
+                              <span>Directions</span>
+                              <ExternalLink className="w-3 h-3" />
+                            </a>
+                          </div>
+                        )}
+
+                        {/* Dress Code */}
+                        {config.showDressCode && (
+                          <div className="flex items-center gap-2 text-xs text-emerald-800 bg-emerald-50/80 px-3 py-1.5 rounded-xl border border-emerald-200">
+                            <Shirt className="w-3.5 h-3.5 text-emerald-700 shrink-0" />
+                            <span className="font-bold uppercase tracking-wider text-[10px] text-emerald-900">Dress:</span>
+                            <span className="text-[11px] font-medium">{event.dressCode}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
 
               </div>
             ))}

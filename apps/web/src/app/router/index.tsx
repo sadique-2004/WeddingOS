@@ -14,6 +14,11 @@ import InvitationsPage from '../../pages/invitations/InvitationsPage'
 import ExpensesPage from '../../pages/expenses/ExpensesPage'
 import VendorsPage from '../../pages/vendors/VendorsPage'
 import WebsiteStudioPage from '../../pages/website/WebsiteStudioPage'
+import GalleryPage from '../../pages/gallery/GalleryPage'
+import CheckInPage from '../../pages/check-in/CheckInPage'
+import MembersPage from '../../pages/members/MembersPage'
+import SettingsPage from '../../pages/settings/SettingsPage'
+import GuestInvitePage from '../../pages/invite/GuestInvitePage'
 import PublicWeddingPage from '../../pages/public/PublicWeddingPage'
 import ProtectedRoute from '../components/ProtectedRoute'
 
@@ -53,6 +58,10 @@ export const router = createBrowserRouter([
   {
     path: '/w/preview',
     element: <PublicWeddingPage />,
+  },
+  {
+    path: '/invite/:token',
+    element: <GuestInvitePage />,
   },
   {
     path: '/app/onboarding',
@@ -101,6 +110,22 @@ export const router = createBrowserRouter([
       {
         path: 'website',
         element: <WebsiteStudioPage />,
+      },
+      {
+        path: 'gallery',
+        element: <GalleryPage />,
+      },
+      {
+        path: 'check-in',
+        element: <CheckInPage />,
+      },
+      {
+        path: 'members',
+        element: <MembersPage />,
+      },
+      {
+        path: 'settings',
+        element: <SettingsPage />,
       },
     ],
   },

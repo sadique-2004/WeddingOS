@@ -458,7 +458,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <div className="font-cormorant text-3xl sm:text-4xl font-bold text-[#3a0208] leading-none">
+            <div className="font-sans text-3xl sm:text-4xl font-bold text-[#3a0208] leading-none tabular-nums">
               {formatCompactINR(totalBudget)}
             </div>
             <span className="text-xs text-neutral-500 font-sans mt-1 block">
@@ -484,7 +484,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <div className="font-cormorant text-3xl sm:text-4xl font-bold text-[#6f0617] leading-none">
+            <div className="font-sans text-3xl sm:text-4xl font-bold text-[#6f0617] leading-none tabular-nums">
               {formatCompactINR(totalRecorded)}
             </div>
             <span className="text-xs text-neutral-500 font-sans mt-1 block">
@@ -515,7 +515,7 @@ export default function ExpensesPage() {
           </div>
 
           <div>
-            <div className="font-cormorant text-3xl sm:text-4xl font-bold text-emerald-700 leading-none">
+            <div className="font-sans text-3xl sm:text-4xl font-bold text-emerald-700 leading-none tabular-nums">
               {formatCompactINR(remainingBudget)}
             </div>
             <span className="text-xs text-neutral-500 font-sans mt-1 block">
@@ -706,7 +706,7 @@ export default function ExpensesPage() {
                       <span className="text-[10px] font-bold text-[#b88444] uppercase leading-none">
                         {new Date(expense.expenseDate).toLocaleDateString('en-US', { month: 'short' })}
                       </span>
-                      <span className="font-cormorant text-xl font-bold text-[#4b030e] leading-none mt-0.5">
+                      <span className="font-sans text-lg font-bold text-[#4b030e] leading-none mt-0.5 tabular-nums">
                         {new Date(expense.expenseDate).toLocaleDateString('en-US', { day: 'numeric' })}
                       </span>
                     </div>
@@ -753,7 +753,7 @@ export default function ExpensesPage() {
                   {/* Right Column: Amount & Actions */}
                   <div className="flex items-center justify-between lg:justify-end gap-6 w-full lg:w-auto pt-2 lg:pt-0 border-t lg:border-t-0 border-neutral-100">
                     <div className="text-left lg:text-right">
-                      <div className="font-cormorant text-2xl sm:text-3xl font-bold text-[#4b030e] leading-none">
+                      <div className="font-sans text-2xl sm:text-3xl font-bold text-[#4b030e] leading-none tabular-nums">
                         {formatINR(expense.amount)}
                       </div>
                       <span className="text-[10px] text-neutral-400 uppercase tracking-wider block mt-0.5">

@@ -685,7 +685,7 @@ export default function WebsiteStudioPage() {
           <div className="flex justify-center bg-neutral-900/5 p-4 rounded-3xl border border-neutral-200 overflow-hidden">
             {previewDevice === 'desktop' ? (
               <div className="w-full h-[760px] overflow-y-auto rounded-2xl bg-white shadow-xl border border-neutral-200 [scrollbar-width:thin]">
-                <PublicWeddingPage previewConfig={config} />
+                <PublicWeddingPage previewConfig={config} isMobileView={false} />
               </div>
             ) : (
               /* Mobile Phone Mockup Frame */
@@ -696,7 +696,7 @@ export default function WebsiteStudioPage() {
                 </div>
                 {/* Mobile Viewport */}
                 <div className="flex-1 overflow-y-auto bg-white [scrollbar-width:none]">
-                  <PublicWeddingPage previewConfig={config} />
+                  <PublicWeddingPage previewConfig={config} isMobileView={true} />
                 </div>
                 {/* iPhone Bottom Bar */}
                 <div className="h-4 bg-neutral-800 flex items-center justify-center shrink-0">

@@ -430,7 +430,7 @@ export default function EventsPage() {
                     <span>Expected Attendance</span>
                   </div>
                   <div className="flex items-baseline justify-start lg:justify-end gap-1.5 pt-0.5">
-                    <span className="font-cormorant text-3xl sm:text-4xl font-bold text-[#4b030e] leading-none">
+                    <span className="font-sans text-3xl sm:text-4xl font-bold text-[#4b030e] leading-none tabular-nums">
                       {event.attendeeEstimate || 250}
                     </span>
                     <span className="text-xs font-bold text-[#85531d] uppercase tracking-wider">

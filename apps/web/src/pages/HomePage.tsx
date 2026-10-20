@@ -174,7 +174,7 @@ export default function HomePage() {
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-6 text-center">
             <div className="p-4 rounded-xl bg-white/70 gold-border shadow-gold-sm">
-              <span className="font-cormorant text-4xl lg:text-5xl font-bold text-[#4b030e] block">
+              <span className="font-sans text-3xl lg:text-4xl font-bold text-[#4b030e] block tabular-nums">
                 10,000+
               </span>
               <span className="text-xs font-semibold tracking-wider uppercase text-[#b88444] mt-1 block">
@@ -182,7 +182,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="p-4 rounded-xl bg-white/70 gold-border shadow-gold-sm">
-              <span className="font-cormorant text-4xl lg:text-5xl font-bold text-[#4b030e] block">
+              <span className="font-sans text-3xl lg:text-4xl font-bold text-[#4b030e] block tabular-nums">
                 99.4%
               </span>
               <span className="text-xs font-semibold tracking-wider uppercase text-[#b88444] mt-1 block">
@@ -190,7 +190,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="p-4 rounded-xl bg-white/70 gold-border shadow-gold-sm">
-              <span className="font-cormorant text-4xl lg:text-5xl font-bold text-[#4b030e] block">
+              <span className="font-sans text-3xl lg:text-4xl font-bold text-[#4b030e] block tabular-nums">
                 2.4M+
               </span>
               <span className="text-xs font-semibold tracking-wider uppercase text-[#b88444] mt-1 block">
@@ -198,7 +198,7 @@ export default function HomePage() {
               </span>
             </div>
             <div className="p-4 rounded-xl bg-white/70 gold-border shadow-gold-sm">
-              <span className="font-cormorant text-4xl lg:text-5xl font-bold text-[#4b030e] block">
+              <span className="font-sans text-2xl lg:text-3xl font-bold text-[#4b030e] block">
                 Vogue &amp; Bazaar
               </span>
               <span className="text-xs font-semibold tracking-wider uppercase text-[#b88444] mt-1 block">

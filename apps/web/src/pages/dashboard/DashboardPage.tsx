@@ -15,7 +15,8 @@ import {
   CheckCircle2,
   QrCode,
   MapPin,
-  AlertCircle
+  AlertCircle,
+  Sparkles
 } from 'lucide-react'
 
 export default function DashboardPage() {
@@ -45,6 +46,49 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Live ticking countdown to wedding date (updates every second)
+  const [timeLeft, setTimeLeft] = useState<{
+    days: number
+    hours: number
+    minutes: number
+    seconds: number
+  }>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+
+  useEffect(() => {
+    const calculateTimeLeft = () => {
+      let targetTime = 0
+      if (wedding.weddingDate) {
+        const parsed = new Date(
+          wedding.weddingDate.includes('T') ? wedding.weddingDate : `${wedding.weddingDate}T10:00:00`
+        ).getTime()
+        if (!isNaN(parsed)) {
+          targetTime = parsed
+        }
+      }
+      if (!targetTime) {
+        targetTime = new Date('2027-02-18T10:00:00').getTime()
+      }
+
+      const now = new Date().getTime()
+      const diff = targetTime - now
+
+      if (diff > 0) {
+        setTimeLeft({
+          days: Math.floor(diff / (1000 * 60 * 60 * 24)),
+          hours: Math.floor((diff / (1000 * 60 * 60)) % 24),
+          minutes: Math.floor((diff / (1000 * 60)) % 60),
+          seconds: Math.floor((diff / 1000) % 60),
+        })
+      } else {
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 })
+      }
+    }
+
+    calculateTimeLeft()
+    const interval = setInterval(calculateTimeLeft, 1000)
+    return () => clearInterval(interval)
+  }, [wedding.weddingDate])
+
   const toggleTask = (id: number) => {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
@@ -56,56 +100,125 @@ export default function DashboardPage() {
   return (
     <div className="space-y-8 pb-12">
       {/* ========================================= */}
-      {/* TOP COUNTDOWN & WELCOME BANNER            */}
+      {/* TOP COUNTDOWN & ROYAL PALACE HERO BANNER  */}
       {/* ========================================= */}
-      <div className="rounded-2xl bg-gradient-to-r from-[#4b030e] via-[#6f0617] to-[#880e1f] text-white p-6 sm:p-8 border border-[#b88444]/40 shadow-gold-sm flex flex-col md:flex-row items-start md:items-center justify-between gap-6 relative overflow-hidden">
-        <div className="space-y-1.5 z-10">
-          <div className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-[#e6bd81]">
+      <div className="relative rounded-3xl overflow-hidden border-2 border-[#e6bd81]/50 shadow-gold group min-h-[300px] flex flex-col justify-between p-6 sm:p-8 lg:p-10">
+        {/* Background Palace Image with Rich Cinematic Overlays */}
+        <div className="absolute inset-0 z-0">
+          <img
+            src="/dashboard-hero.jpg"
+            alt="Royal Palace Mandap Pavilion"
+            className="w-full h-full object-cover object-center scale-100 group-hover:scale-105 transition-transform duration-1000 ease-out"
+          />
+          {/* Subtle gradient scrims for contrast without hiding the royal architecture */}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/55 to-black/45" />
+          <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/40 to-black/70 sm:from-black/80 sm:via-transparent sm:to-black/60" />
+        </div>
+
+        {/* Top Header Row: Live Pill & Milestone */}
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-black/40 backdrop-blur-md border border-[#e6bd81]/50 text-xs font-semibold uppercase tracking-widest text-[#e6bd81] shadow-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse inline-block" />
             <Clock className="w-3.5 h-3.5" />
             <span>Ceremonial Countdown</span>
           </div>
-          <h1 className="font-cormorant text-3xl sm:text-4xl lg:text-5xl font-normal leading-tight text-white">
-            {wedding.brideName} &amp; {wedding.groomName}
-          </h1>
-          <p className="text-xs sm:text-sm text-white/80 font-sans flex items-center gap-2">
-            <Calendar className="w-3.5 h-3.5 text-[#e6bd81]" />
-            <span>{wedding.weddingDate}</span>
-            <span>&bull;</span>
-            <MapPin className="w-3.5 h-3.5 text-[#e6bd81]" />
-            <span>{wedding.locationName}</span>
-          </p>
+
+          <div className="inline-flex items-center gap-2 text-xs font-medium text-white/95 bg-black/40 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20">
+            <Sparkles className="w-3.5 h-3.5 text-[#e6bd81]" />
+            <span>Royal Festivities</span>
+          </div>
         </div>
 
-        {/* Live Countdown Clock Widget */}
-        <div className="flex items-center gap-3 z-10">
-          <div className="p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-[#e6bd81]/30 text-center min-w-[70px]">
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-[#e6bd81] block leading-none">
-              124
+        {/* Center: Couple Names & Ceremony Details */}
+        <div className="relative z-10 my-4 space-y-2">
+          <h1 className="font-cormorant text-4xl sm:text-5xl lg:text-6xl font-normal leading-tight text-white tracking-wide drop-shadow-lg">
+            {wedding.brideName} &amp; {wedding.groomName}
+          </h1>
+
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-xs sm:text-sm text-stone-200 font-sans drop-shadow">
+            <span className="flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-[#e6bd81]" />
+              <span className="font-medium text-white">
+                February 18, 2027
+              </span>
             </span>
-            <span className="text-[10px] uppercase font-semibold text-white/80 tracking-wider">Days</span>
-          </div>
-          <div className="p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-[#e6bd81]/30 text-center min-w-[70px]">
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-[#e6bd81] block leading-none">
-              18
+            <span className="text-[#e6bd81]">&bull;</span>
+            <span className="flex items-center gap-1.5">
+              <MapPin className="w-4 h-4 text-[#e6bd81]" />
+              <span>{wedding.locationName}</span>
             </span>
-            <span className="text-[10px] uppercase font-semibold text-white/80 tracking-wider">Hours</span>
           </div>
-          <div className="p-3 sm:p-4 rounded-xl bg-white/10 backdrop-blur-md border border-[#e6bd81]/30 text-center min-w-[70px]">
-            <span className="font-cormorant text-2xl sm:text-3xl font-bold text-[#e6bd81] block leading-none">
-              45
-            </span>
-            <span className="text-[10px] uppercase font-semibold text-white/80 tracking-wider">Mins</span>
+        </div>
+
+        {/* Bottom Row: Live Second-by-Second Countdown & Itinerary Button */}
+        <div className="relative z-10 pt-5 border-t border-white/20 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5 sm:gap-3.5">
+            {/* Days */}
+            <div className="px-3.5 py-2.5 rounded-2xl bg-black/50 backdrop-blur-md border border-[#e6bd81]/40 text-center min-w-[66px] sm:min-w-[76px] shadow-lg">
+              <span className="font-sans text-2xl sm:text-3xl lg:text-4xl font-bold text-[#e6bd81] block leading-none tabular-nums drop-shadow">
+                {timeLeft.days}
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-semibold text-white/80 tracking-widest mt-1 block">
+                Days
+              </span>
+            </div>
+
+            <span className="text-xl sm:text-2xl font-light text-[#e6bd81]/60 -mt-2">:</span>
+
+            {/* Hours */}
+            <div className="px-3.5 py-2.5 rounded-2xl bg-black/50 backdrop-blur-md border border-[#e6bd81]/40 text-center min-w-[66px] sm:min-w-[76px] shadow-lg">
+              <span className="font-sans text-2xl sm:text-3xl lg:text-4xl font-bold text-white block leading-none tabular-nums drop-shadow">
+                {String(timeLeft.hours).padStart(2, '0')}
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-semibold text-white/80 tracking-widest mt-1 block">
+                Hours
+              </span>
+            </div>
+
+            <span className="text-xl sm:text-2xl font-light text-[#e6bd81]/60 -mt-2">:</span>
+
+            {/* Mins */}
+            <div className="px-3.5 py-2.5 rounded-2xl bg-black/50 backdrop-blur-md border border-[#e6bd81]/40 text-center min-w-[66px] sm:min-w-[76px] shadow-lg">
+              <span className="font-sans text-2xl sm:text-3xl lg:text-4xl font-bold text-white block leading-none tabular-nums drop-shadow">
+                {String(timeLeft.minutes).padStart(2, '0')}
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-semibold text-white/80 tracking-widest mt-1 block">
+                Mins
+              </span>
+            </div>
+
+            <span className="text-xl sm:text-2xl font-light text-[#e6bd81]/60 -mt-2">:</span>
+
+            {/* Secs */}
+            <div className="px-3.5 py-2.5 rounded-2xl bg-[#e6bd81]/25 backdrop-blur-md border border-[#e6bd81]/70 text-center min-w-[66px] sm:min-w-[76px] shadow-gold ring-1 ring-[#e6bd81]/50">
+              <span className="font-sans text-2xl sm:text-3xl lg:text-4xl font-bold text-[#e6bd81] block leading-none tabular-nums drop-shadow">
+                {String(timeLeft.seconds).padStart(2, '0')}
+              </span>
+              <span className="text-[9px] sm:text-[10px] uppercase font-semibold text-white tracking-widest mt-1 block">
+                Secs
+              </span>
+            </div>
           </div>
+
+          <Link to="/app/events" className="shrink-0 w-full sm:w-auto">
+            <button className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-white/15 hover:bg-white/25 active:scale-95 backdrop-blur-md border border-white/30 text-white text-xs font-semibold tracking-wider transition-all flex items-center justify-center gap-2 group/btn">
+              <span>View Ceremony Schedule</span>
+              <ArrowRight className="w-3.5 h-3.5 text-[#e6bd81] group-hover/btn:translate-x-1 transition-transform" />
+            </button>
+          </Link>
         </div>
       </div>
 
       {/* ========================================= */}
       {/* QUICK ACTIONS BAR                         */}
       {/* ========================================= */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-3.5 rounded-xl gold-border shadow-2xs">
-        <span className="text-xs font-semibold text-[#4b030e] px-2 uppercase tracking-wider">
-          Quick Actions:
-        </span>
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-4 rounded-2xl gold-border shadow-2xs">
+        <div className="flex items-center gap-2 px-1">
+          <span className="w-2 h-2 rounded-full bg-[#b88444]" />
+          <span className="text-xs font-bold text-[#4b030e] uppercase tracking-wider">
+            Quick Actions:
+          </span>
+        </div>
         <div className="flex flex-wrap items-center gap-2">
           <Link to="/app/events">
             <Button variant="secondary" size="sm" leftIcon={<Plus className="w-3.5 h-3.5" />}>
@@ -148,7 +261,7 @@ export default function DashboardPage() {
                 RSVP Attendance
               </span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="font-cormorant text-3xl font-bold text-[#4b030e]">
+                <span className="font-sans text-2xl sm:text-3xl font-bold text-[#4b030e] tabular-nums">
                   340
                 </span>
                 <span className="text-xs text-[#4b030e]/60 font-sans">
@@ -183,7 +296,7 @@ export default function DashboardPage() {
                 Preparation Tasks
               </span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="font-cormorant text-3xl font-bold text-[#4b030e]">
+                <span className="font-sans text-2xl sm:text-3xl font-bold text-[#4b030e] tabular-nums">
                   {completedCount} of {tasks.length}
                 </span>
                 <span className="text-xs text-[#4b030e]/60 font-sans">
@@ -219,7 +332,7 @@ export default function DashboardPage() {
                   Expenses Recorded
                 </span>
                 <div className="flex items-baseline gap-2 mt-1">
-                  <span className="font-cormorant text-3xl font-bold text-[#4b030e]">
+                  <span className="font-sans text-2xl sm:text-3xl font-bold text-[#4b030e] tabular-nums">
                     ₹30,85,000
                   </span>
                 </div>
@@ -249,7 +362,7 @@ export default function DashboardPage() {
                 Photo Moderation Queue
               </span>
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="font-cormorant text-3xl font-bold text-[#a5172a]">
+                <span className="font-sans text-2xl sm:text-3xl font-bold text-[#a5172a] tabular-nums">
                   14
                 </span>
                 <span className="text-xs text-[#4b030e]/60 font-sans">
