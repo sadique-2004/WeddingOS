@@ -1,0 +1,6 @@
+.git
+.agents
+node_modules
+apps/web/node_modules
+apps/web/dist
+services/api/target
