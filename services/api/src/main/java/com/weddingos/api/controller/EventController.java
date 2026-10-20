@@ -26,6 +26,12 @@ public class EventController {
         return ResponseEntity.ok(eventService.getEvents(weddingId));
     }
 
+    @GetMapping("/{id}")
+    @Operation(summary = "Get a single ceremony by ID")
+    public ResponseEntity<WeddingEvent> getEventById(@PathVariable Long id) {
+        return ResponseEntity.ok(eventService.getEventById(id));
+    }
+
     @PostMapping
     @Operation(summary = "Add a new ceremony to the wedding itinerary")
     public ResponseEntity<WeddingEvent> createEvent(@RequestParam(defaultValue = "1") Long weddingId,

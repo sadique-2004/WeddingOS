@@ -57,8 +57,11 @@ public class Wedding {
     public Long getId() { return id; }
     public void setId(Long id) { this.id = id; }
 
+    @com.fasterxml.jackson.annotation.JsonIgnore
     public AppUser getOwnerUser() { return ownerUser; }
     public void setOwnerUser(AppUser ownerUser) { this.ownerUser = ownerUser; }
+
+    public Long getOwnerUserId() { return ownerUser != null ? ownerUser.getId() : null; }
 
     public String getBrideName() { return brideName; }
     public void setBrideName(String brideName) { this.brideName = brideName; }

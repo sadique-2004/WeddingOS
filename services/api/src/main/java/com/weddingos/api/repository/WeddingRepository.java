@@ -8,5 +8,5 @@ import java.util.List;
 
 @Repository
 public interface WeddingRepository extends JpaRepository<Wedding, Long> {
-    List<Wedding> findByOwnerUserId(Long ownerUserId);
+    List<Wedding> findByOwnerUser_Id(Long ownerUserId);
 }

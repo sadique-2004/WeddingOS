@@ -26,6 +26,12 @@ public class EventService {
         return eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(weddingId);
     }
 
+    @Transactional(readOnly = true)
+    public WeddingEvent getEventById(Long eventId) {
+        return eventRepository.findById(eventId)
+                .orElseThrow(() -> new IllegalArgumentException("Ceremony event not found with ID: " + eventId));
+    }
+
     public WeddingEvent createEvent(Long weddingId, WeddingEvent event) {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));

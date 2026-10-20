@@ -90,4 +90,37 @@ public class WorkspaceService {
         if (venueName != null) wedding.setVenueName(venueName);
         return weddingRepository.save(wedding);
     }
+
+    public Wedding createWorkspace(Long ownerUserId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, BigDecimal totalBudget, String slug) {
+        AppUser owner = userRepository.findById(ownerUserId != null ? ownerUserId : 1L)
+                .orElseGet(() -> userRepository.findAll().stream().findFirst().orElseThrow());
+
+        Wedding wedding = new Wedding();
+        wedding.setOwnerUser(owner);
+        wedding.setBrideName(brideName != null ? brideName : "Aisha");
+        wedding.setGroomName(groomName != null ? groomName : "Imran");
+        wedding.setWeddingDate(weddingDate != null ? weddingDate : LocalDate.now().plusMonths(6));
+        wedding.setCity(city != null ? city : "Udaipur, Rajasthan");
+        wedding.setVenueName(venueName != null ? venueName : "The Royal Palace");
+        if (totalBudget != null) wedding.setTotalBudgetTarget(totalBudget);
+        Wedding saved = weddingRepository.save(wedding);
+
+        if (slug != null && !slug.isBlank()) {
+            WeddingSlug weddingSlug = new WeddingSlug();
+            weddingSlug.setWedding(saved);
+            weddingSlug.setSlug(slug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-"));
+            weddingSlug.setIsActive(true);
+            slugRepository.save(weddingSlug);
+        }
+
+        // Auto-provision initial Admin membership
+        WeddingMembership membership = new WeddingMembership();
+        membership.setWedding(saved);
+        membership.setUser(owner);
+        membership.setRole(WeddingMembership.Role.ADMIN);
+        membership.setTitle("Workspace Owner & Admin");
+        membershipRepository.save(membership);
+
+        return saved;
+    }
 }

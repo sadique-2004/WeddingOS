@@ -24,9 +24,28 @@ public class WorkspaceController {
 
     @GetMapping("/active")
     @Operation(summary = "Get active wedding workspace summary, countdown and budget health")
-    public ResponseEntity<Map<String, Object>> getActiveWorkspace() {
-        // Default to workspace 1 for demo
-        return ResponseEntity.ok(workspaceService.getActiveWorkspaceSummary(1L));
+    public ResponseEntity<Map<String, Object>> getActiveWorkspace(@RequestParam(defaultValue = "1") Long weddingId) {
+        return ResponseEntity.ok(workspaceService.getActiveWorkspaceSummary(weddingId));
+    }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Get workspace details for a specific wedding ID")
+    public ResponseEntity<Map<String, Object>> getWorkspaceById(@PathVariable Long id) {
+        return ResponseEntity.ok(workspaceService.getActiveWorkspaceSummary(id));
+    }
+
+    @PostMapping
+    @Operation(summary = "Create a new wedding workspace for a couple/organizer")
+    public ResponseEntity<Wedding> createWorkspace(@RequestBody Map<String, Object> payload) {
+        String bride = (String) payload.get("brideName");
+        String groom = (String) payload.get("groomName");
+        LocalDate date = payload.containsKey("weddingDate") ? LocalDate.parse(payload.get("weddingDate").toString()) : null;
+        String city = (String) payload.get("city");
+        String venue = (String) payload.get("venueName");
+        BigDecimal budget = payload.containsKey("totalBudgetTarget") ? new BigDecimal(payload.get("totalBudgetTarget").toString()) : null;
+        Long ownerUserId = payload.containsKey("ownerUserId") ? Long.valueOf(payload.get("ownerUserId").toString()) : null;
+        String slug = (String) payload.get("slug");
+        return ResponseEntity.ok(workspaceService.createWorkspace(ownerUserId, bride, groom, date, city, venue, budget, slug));
     }
 
     @PutMapping("/budget")
