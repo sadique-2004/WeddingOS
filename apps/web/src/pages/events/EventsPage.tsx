@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   Calendar,
   Clock,
@@ -16,6 +16,7 @@ import {
   Info,
   Users,
 } from 'lucide-react'
+import { eventsApi } from '../../services/apiClient'
 
 export interface WeddingEvent {
   id: string
@@ -123,10 +124,77 @@ const INITIAL_EVENTS: WeddingEvent[] = [
 ]
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<WeddingEvent[]>(INITIAL_EVENTS)
+  const getActiveWeddingId = (): number => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return Number(parsed.id) || 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }
+
+  const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
+  const [events, setEvents] = useState<WeddingEvent[]>([])
+  const [loading, setLoading] = useState<boolean>(true)
   const [filterDay, setFilterDay] = useState<string>('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<WeddingEvent | null>(null)
+
+  const loadEvents = async (wid: number) => {
+    setLoading(true)
+    try {
+      const backendEvents = await eventsApi.getAll(wid)
+      if (backendEvents && Array.isArray(backendEvents)) {
+        setEvents(
+          backendEvents.map((be) => ({
+            id: String(be.id),
+            name: be.name,
+            eventType: (be.eventType as WeddingEvent['eventType']) || 'other',
+            eventDate: be.eventDate || '',
+            dayLabel: be.dayLabel || 'Day 1',
+            startTime: be.startTime || '10:00 AM',
+            endTime: be.endTime || '01:00 PM',
+            venueName: be.venueName || '',
+            address: be.address || '',
+            dressCode: be.dressCode || '',
+            mapUrl: be.mapUrl || '',
+            description: be.description || '',
+            attendeeEstimate: be.attendeeEstimate || 100,
+            imageUrl: be.imageUrl || '',
+          }))
+        )
+      } else {
+        setEvents(wid === 1 ? INITIAL_EVENTS : [])
+      }
+    } catch (err) {
+      console.warn('Backend events fetch error/offline, using fallback:', err)
+      if (wid === 1) {
+        setEvents(INITIAL_EVENTS)
+      } else {
+        setEvents([])
+      }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    const wid = getActiveWeddingId()
+    setWeddingId(wid)
+    loadEvents(wid)
+
+    const handleUpdate = () => {
+      const newWid = getActiveWeddingId()
+      setWeddingId(newWid)
+      loadEvents(newWid)
+    }
+    window.addEventListener('weddingos_wedding_updated', handleUpdate)
+    return () => window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+  }, [])
 
   // Form State
   const [formData, setFormData] = useState({
@@ -203,32 +271,56 @@ export default function EventsPage() {
     setIsModalOpen(true)
   }
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (confirm(`Are you sure you want to remove "${name}" from your itinerary?`)) {
-      setEvents(events.filter((e) => e.id !== id))
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        await eventsApi.delete(numId).catch((err) => console.warn('Backend delete failed:', err))
+      }
+      setEvents((prev) => prev.filter((e) => e.id !== id))
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
+    const payload = {
+      name: formData.name,
+      eventType: formData.eventType,
+      eventDate: formData.eventDate,
+      dayLabel: formData.dayLabel,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      venueName: formData.venueName,
+      address: formData.address,
+      dressCode: formData.dressCode,
+      mapUrl: formData.mapUrl,
+      description: formData.description,
+      attendeeEstimate: formData.attendeeEstimate,
+      imageUrl: formData.imageUrl,
+    }
+
     if (editingEvent) {
-      setEvents(
-        events.map((evt) =>
-          evt.id === editingEvent.id
-            ? {
-                ...evt,
-                ...formData,
-              }
-            : evt
-        )
+      const numId = Number(editingEvent.id)
+      if (!isNaN(numId)) {
+        await eventsApi.update(numId, payload).catch((err) => console.warn('Backend update failed:', err))
+      }
+      setEvents((prev) =>
+        prev.map((evt) => (evt.id === editingEvent.id ? { ...evt, ...formData } : evt))
       )
     } else {
+      let createdId = `evt-${Date.now()}`
+      try {
+        const saved = await eventsApi.create(payload, weddingId)
+        if (saved?.id) createdId = String(saved.id)
+      } catch (err) {
+        console.warn('Backend event create offline:', err)
+      }
       const newEvent: WeddingEvent = {
-        id: `evt-${Date.now()}`,
+        id: createdId,
         ...formData,
       }
-      setEvents([...events, newEvent])
+      setEvents((prev) => [...prev, newEvent])
     }
     setIsModalOpen(false)
   }
@@ -326,8 +418,30 @@ export default function EventsPage() {
       {/* ========================================= */}
       {/* 3. CEREMONIES TIMELINE LIST               */}
       {/* ========================================= */}
-      <div className="space-y-6">
-        {filteredEvents.map((event, index) => (
+      {filteredEvents.length === 0 ? (
+        <div className="bg-white rounded-2xl border border-[#e6bd81]/40 p-12 text-center space-y-4 shadow-xs">
+          <div className="w-14 h-14 mx-auto rounded-full bg-[#fcf6ed] border border-[#e6bd81]/50 flex items-center justify-center text-[#85531d]">
+            <Calendar className="w-7 h-7 text-[#b88444]" />
+          </div>
+          <div className="space-y-1.5 max-w-md mx-auto">
+            <h3 className="font-cormorant text-2xl font-normal text-[#3a0208]">
+              No Ceremonies Added Yet
+            </h3>
+            <p className="text-xs text-neutral-500">
+              Your wedding itinerary is currently clean. Begin orchestrating your celebration by adding your first sacred ritual, musical sangeet, or gala reception.
+            </p>
+          </div>
+          <button
+            onClick={openAddModal}
+            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-[#6f0617] to-[#4b030e] text-[#f4efe8] text-xs font-semibold hover:shadow-gold-sm transition-all inline-flex items-center gap-2 cursor-pointer"
+          >
+            <Plus className="w-4 h-4 text-[#e6bd81]" />
+            <span>Add First Ceremony</span>
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {filteredEvents.map((event, index) => (
           <div
             key={event.id}
             className="group bg-white rounded-2xl border border-[#e6bd81]/40 shadow-xs hover:shadow-gold-sm transition-all duration-300 overflow-hidden"
@@ -467,6 +581,7 @@ export default function EventsPage() {
           </div>
         ))}
       </div>
+    )}
 
       {/* ========================================= */}
       {/* 4. ADD / EDIT CEREMONY MODAL DIALOG       */}

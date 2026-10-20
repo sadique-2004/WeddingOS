@@ -1,4 +1,5 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
+import { tasksApi } from '../../services/apiClient'
 import {
   CheckCircle2,
   Circle,
@@ -122,7 +123,77 @@ const INITIAL_TASKS: Task[] = [
 ]
 
 export default function TasksPage() {
-  const [tasks, setTasks] = useState<Task[]>(INITIAL_TASKS)
+  const getActiveWeddingId = (): number => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return Number(parsed.id) || 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }
+
+  const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
+  const [tasks, setTasks] = useState<Task[]>([])
+
+  const loadTasks = async (wid: number) => {
+    const storageKey = `weddingos_${wid}_tasks`
+    try {
+      const backendTasks = await tasksApi.getAll(wid)
+      if (backendTasks && Array.isArray(backendTasks)) {
+        const mapped: Task[] = backendTasks.map((bt) => ({
+          id: String(bt.id),
+          title: bt.title,
+          description: '',
+          priority: (bt.priority as Task['priority']) || 'MEDIUM',
+          status: (bt.status as Task['status']) || 'TODO',
+          dueDate: bt.dueDate || new Date().toISOString().split('T')[0],
+          assigneeName: bt.assignedTo || 'Unassigned',
+          assigneeRole: 'Organizer',
+          relatedCeremony: 'All Ceremonies',
+        }))
+        setTasks(mapped)
+        localStorage.setItem(storageKey, JSON.stringify(mapped))
+        return
+      }
+    } catch {
+      // ignore
+    }
+
+    const cached = localStorage.getItem(storageKey)
+    if (cached) {
+      try {
+        setTasks(JSON.parse(cached))
+        return
+      } catch {}
+    }
+
+    if (wid === 1) {
+      setTasks(INITIAL_TASKS)
+      localStorage.setItem(storageKey, JSON.stringify(INITIAL_TASKS))
+    } else {
+      setTasks([])
+      localStorage.setItem(storageKey, JSON.stringify([]))
+    }
+  }
+
+  useEffect(() => {
+    const wid = getActiveWeddingId()
+    setWeddingId(wid)
+    loadTasks(wid)
+
+    const handleUpdate = () => {
+      const newWid = getActiveWeddingId()
+      setWeddingId(newWid)
+      loadTasks(newWid)
+    }
+    window.addEventListener('weddingos_wedding_updated', handleUpdate)
+    return () => window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+  }, [])
+
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
   const [priorityFilter, setPriorityFilter] = useState<string>('all')
   const [ceremonyFilter, setCeremonyFilter] = useState<string>('all')
@@ -211,42 +282,82 @@ export default function TasksPage() {
     setIsModalOpen(true)
   }
 
-  const handleToggleStatus = (id: string) => {
-    setTasks(
-      tasks.map((t) => {
-        if (t.id === id) {
-          const nextStatus: Task['status'] =
-            t.status === 'COMPLETED'
-              ? 'TODO'
-              : t.status === 'TODO'
-              ? 'IN_PROGRESS'
-              : 'COMPLETED'
-          return { ...t, status: nextStatus }
-        }
-        return t
-      })
-    )
+  const handleToggleStatus = async (id: string) => {
+    const numId = Number(id)
+    if (!isNaN(numId)) {
+      await tasksApi.update(numId, {} as any).catch(() => {})
+    }
+    const updated = tasks.map((t) => {
+      if (t.id === id) {
+        const nextStatus: Task['status'] =
+          t.status === 'COMPLETED'
+            ? 'TODO'
+            : t.status === 'TODO'
+            ? 'IN_PROGRESS'
+            : 'COMPLETED'
+        return { ...t, status: nextStatus }
+      }
+      return t
+    })
+    setTasks(updated)
+    localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (confirm('Remove this preparation task from your wedding checklist?')) {
-      setTasks(tasks.filter((t) => t.id !== id))
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        await tasksApi.delete(numId).catch(() => {})
+      }
+      const updated = tasks.filter((t) => t.id !== id)
+      setTasks(updated)
+      localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    let updated: Task[] = []
     if (editingTask) {
-      setTasks(
-        tasks.map((t) => (t.id === editingTask.id ? { ...t, ...formData } : t))
-      )
+      const numId = Number(editingTask.id)
+      if (!isNaN(numId)) {
+        await tasksApi
+          .update(numId, {
+            title: formData.title,
+            priority: formData.priority as any,
+            status: formData.status as any,
+            dueDate: formData.dueDate,
+            assignedTo: formData.assigneeName,
+          })
+          .catch(() => {})
+      }
+      updated = tasks.map((t) => (t.id === editingTask.id ? { ...t, ...formData } : t))
     } else {
+      let createdId = `tsk-${Date.now()}`
+      try {
+        const saved = await tasksApi.create(
+          {
+            title: formData.title,
+            priority: formData.priority as any,
+            status: formData.status as any,
+            dueDate: formData.dueDate,
+            assignedTo: formData.assigneeName,
+            category: formData.relatedCeremony,
+          },
+          weddingId
+        )
+        if (saved?.id) createdId = String(saved.id)
+      } catch {
+        // ignore
+      }
       const newTask: Task = {
-        id: `tsk-${Date.now()}`,
+        id: createdId,
         ...formData,
       }
-      setTasks([...tasks, newTask])
+      updated = [...tasks, newTask]
     }
+    setTasks(updated)
+    localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
     setIsModalOpen(false)
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react'
+import React, { useState, useEffect, useMemo, useRef } from 'react'
 import {
   Camera,
   CheckCircle2,
@@ -461,15 +461,37 @@ export default function GalleryPage() {
   const [uploadTitle, setUploadTitle] = useState('')
   const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Persist state
+  // Persist state & dispatch update
   useEffect(() => {
     try {
       localStorage.setItem('weddingos_gallery_photos', JSON.stringify(photos))
+      window.dispatchEvent(new Event('weddingos_gallery_updated'))
     } catch {
       // ignore
     }
   }, [photos])
+
+  // Real-time sync listener when guest uploads on public gallery
+  useEffect(() => {
+    const handleSync = () => {
+      try {
+        const stored = localStorage.getItem('weddingos_gallery_photos')
+        if (stored) {
+          setPhotos(JSON.parse(stored))
+        }
+      } catch {
+        // ignore
+      }
+    }
+    window.addEventListener('weddingos_gallery_updated', handleSync)
+    window.addEventListener('storage', handleSync)
+    return () => {
+      window.removeEventListener('weddingos_gallery_updated', handleSync)
+      window.removeEventListener('storage', handleSync)
+    }
+  }, [])
 
   useEffect(() => {
     try {
@@ -622,12 +644,16 @@ export default function GalleryPage() {
   // Upload handler
   const handleMockUpload = (e: React.FormEvent) => {
     e.preventDefault()
+    if (!selectedFilePreview) {
+      alert('Please select an image file to upload.')
+      return
+    }
     setIsUploading(true)
 
     setTimeout(() => {
       const newPhoto: GalleryPhoto = {
         id: `photo-u-${Date.now()}`,
-        url: selectedFilePreview || '/events/pheras.jpg',
+        url: selectedFilePreview,
         title: uploadTitle.trim() || 'Uploaded Wedding Memory',
         ceremony: uploadCeremony,
         uploaderName: uploaderName.trim() || 'Organizer',
@@ -649,7 +675,7 @@ export default function GalleryPage() {
           ? 'Photo uploaded to pending moderation queue!'
           : 'Photo uploaded and published live!'
       )
-    }, 1000)
+    }, 400)
   }
 
   // Rotate token
@@ -659,7 +685,7 @@ export default function GalleryPage() {
     showToast('New private access token generated! Previous links are now revoked.')
   }
 
-  const galleryUrl = `http://localhost:5173/gallery/${settings.slug}?token=${settings.token}`
+  const galleryUrl = `${window.location.origin}/gallery/${settings.slug}?token=${settings.token}`
 
   return (
     <div className="space-y-8 pb-16">
@@ -1466,15 +1492,12 @@ export default function GalleryPage() {
                   </div>
 
                   {/* QR Code Graphic Container */}
-                  <div className="w-40 h-40 bg-white p-3 rounded-2xl mx-auto shadow-md border-2 border-[#e6bd81]/40 flex flex-col items-center justify-center">
-                    <div className="relative w-full h-full flex items-center justify-center">
-                      <QrCode className="w-full h-full text-[#4b030e]" />
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-8 h-8 rounded-lg bg-[#4b030e] border-2 border-[#e6bd81] flex items-center justify-center">
-                          <Camera className="w-4 h-4 text-[#e6bd81]" />
-                        </div>
-                      </div>
-                    </div>
+                  <div className="w-48 h-48 bg-white p-3 rounded-2xl mx-auto shadow-md border-2 border-[#e6bd81]/40 flex flex-col items-center justify-center">
+                    <img
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&color=4b030e&bgcolor=ffffff&data=${encodeURIComponent(galleryUrl)}`}
+                      alt="Wedding Memories QR Code"
+                      className="w-full h-full object-contain rounded-xl"
+                    />
                   </div>
 
                   <p className="text-xs text-white/90 font-medium">
@@ -1491,23 +1514,26 @@ export default function GalleryPage() {
                     size="sm"
                     className="w-full"
                     onClick={() => {
-                      window.print()
+                      window.open(galleryUrl, '_blank')
                     }}
-                    leftIcon={<Download className="w-3.5 h-3.5" />}
+                    leftIcon={<ExternalLink className="w-3.5 h-3.5" />}
                   >
-                    Print Table Cards
+                    Open Live Guest Gallery
                   </Button>
                   <Button
                     variant="secondary"
                     size="sm"
                     className="w-full"
                     onClick={() => {
-                      navigator.clipboard.writeText(galleryUrl)
-                      showToast('Copied link!')
+                      const link = document.createElement('a')
+                      link.href = `https://api.qrserver.com/v1/create-qr-code/?size=600x600&color=4b030e&bgcolor=ffffff&data=${encodeURIComponent(galleryUrl)}`
+                      link.download = `Wedding_Gallery_QR_${settings.slug}.png`
+                      link.target = '_blank'
+                      link.click()
                     }}
-                    leftIcon={<Copy className="w-3.5 h-3.5" />}
+                    leftIcon={<Download className="w-3.5 h-3.5" />}
                   >
-                    Copy Link
+                    Download QR Code
                   </Button>
                 </div>
               </CardContent>
@@ -1713,17 +1739,34 @@ export default function GalleryPage() {
               </button>
             </div>
 
-            {/* QR Card Visual */}
+            {/* Real Scannable QR Card Visual */}
             <div className="p-5 rounded-2xl bg-[#faf4ec] border border-[#e6bd81]/50 text-center space-y-3">
-              <div className="w-40 h-40 bg-white p-3 rounded-2xl mx-auto shadow-sm border border-[#e6bd81]/40 flex items-center justify-center">
-                <QrCode className="w-full h-full text-[#4b030e]" />
+              <div className="w-48 h-48 bg-white p-2.5 rounded-2xl mx-auto shadow-sm border border-[#e6bd81]/40 flex items-center justify-center">
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=300x300&color=4b030e&bgcolor=ffffff&data=${encodeURIComponent(galleryUrl)}`}
+                  alt="Scannable QR Code for Wedding Gallery"
+                  className="w-full h-full object-contain rounded-xl"
+                />
               </div>
               <div>
-                <p className="text-xs font-bold text-[#4b030e]">Aisha &amp; Imran Wedding Gallery</p>
-                <p className="text-[11px] text-[#4b030e]/70">
-                  Scan to upload guest photos directly from your phone.
+                <p className="text-xs font-bold text-[#4b030e]">Live Guest Wedding Gallery</p>
+                <p className="text-[11px] text-[#4b030e]/75">
+                  Point any phone camera at this QR code to upload and view memories in real-time.
                 </p>
               </div>
+            </div>
+
+            {/* Direct Open Link */}
+            <div>
+              <a
+                href={galleryUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="w-full py-2.5 px-4 rounded-xl bg-white border border-[#e6bd81] hover:bg-[#faf4ec] text-[#4b030e] text-xs font-bold flex items-center justify-center gap-2 shadow-2xs transition-all"
+              >
+                <ExternalLink className="w-3.5 h-3.5 text-[#b88444]" />
+                <span>Open Public Guest Gallery in New Tab</span>
+              </a>
             </div>
 
             {/* Link Copy Field */}
@@ -1760,7 +1803,7 @@ export default function GalleryPage() {
                 onClick={() => {
                   window.open(
                     `https://api.whatsapp.com/send?text=${encodeURIComponent(
-                      `View & upload wedding memories for Aisha & Imran: ${galleryUrl}`
+                      `View & upload wedding memories: ${galleryUrl}`
                     )}`,
                     '_blank'
                   )
@@ -1810,15 +1853,48 @@ export default function GalleryPage() {
             </div>
 
             <form onSubmit={handleMockUpload} className="space-y-4">
-              {/* Dropzone */}
-              <div className="p-6 rounded-2xl border-2 border-dashed border-[#e6bd81] bg-[#faf4ec]/50 hover:bg-[#faf4ec] transition-colors text-center cursor-pointer">
-                <Upload className="w-8 h-8 text-[#b88444] mx-auto mb-2" />
-                <p className="text-xs font-bold text-[#4b030e]">
-                  Click to select photos or drag &amp; drop
-                </p>
-                <p className="text-[10px] text-[#4b030e]/70 mt-1">
-                  JPG, PNG, WEBP, HEIC supported &bull; Max 25 MB per file
-                </p>
+              {/* File Input and Dropzone */}
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) {
+                    const reader = new FileReader()
+                    reader.onload = () => setSelectedFilePreview(reader.result as string)
+                    reader.readAsDataURL(file)
+                  }
+                }}
+                className="hidden"
+              />
+
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                className="p-6 rounded-2xl border-2 border-dashed border-[#e6bd81] bg-[#faf4ec]/50 hover:bg-[#faf4ec] transition-colors text-center cursor-pointer"
+              >
+                {selectedFilePreview ? (
+                  <div className="relative aspect-video rounded-xl overflow-hidden border border-[#e6bd81]/60">
+                    <img
+                      src={selectedFilePreview}
+                      alt="Selected upload"
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute bottom-2 right-2 px-2.5 py-1 rounded bg-black/75 text-white text-[10px] font-bold">
+                      Change Photo
+                    </span>
+                  </div>
+                ) : (
+                  <>
+                    <Upload className="w-8 h-8 text-[#b88444] mx-auto mb-2" />
+                    <p className="text-xs font-bold text-[#4b030e]">
+                      Click to choose image or drag &amp; drop
+                    </p>
+                    <p className="text-[10px] text-[#4b030e]/70 mt-1">
+                      JPG, PNG, WEBP, HEIC supported &bull; High resolution
+                    </p>
+                  </>
+                )}
               </div>
 
               {/* Title & Caption */}

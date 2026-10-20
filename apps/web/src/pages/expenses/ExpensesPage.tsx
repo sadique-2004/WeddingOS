@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { expensesApi } from '../../services/apiClient'
 import {
   DollarSign,
   TrendingUp,
@@ -156,11 +157,82 @@ const INITIAL_EXPENSES: Expense[] = [
 ]
 
 export default function ExpensesPage() {
+  const getActiveWeddingId = (): number => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return Number(parsed.id) || 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }
+
+  const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
   const [totalBudget, setTotalBudget] = useState<number>(4500000) // Default ₹45 Lakhs
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
   const [budgetInput, setBudgetInput] = useState<string>('4500000')
 
-  const [expenses, setExpenses] = useState<Expense[]>(INITIAL_EXPENSES)
+  const [expenses, setExpenses] = useState<Expense[]>([])
+
+  const loadExpenses = async (wid: number) => {
+    const storageKey = `weddingos_${wid}_expenses`
+    try {
+      const res: any = await expensesApi.getAll(wid)
+      if (res && res.expenses && Array.isArray(res.expenses)) {
+        const mapped: Expense[] = res.expenses.map((be: any) => ({
+          id: String(be.id),
+          title: be.title,
+          amount: Number(be.actualAmount || be.plannedAmount || 0),
+          currencyCode: 'INR',
+          expenseDate: be.paymentDate || new Date().toISOString().split('T')[0],
+          category: (be.category as ExpenseCategory) || 'Other',
+          relatedCeremony: 'All Ceremonies',
+          vendorName: be.vendorName || '',
+          paymentStatus: (be.status as any) || 'PAID',
+          paymentMethod: 'NEFT / RTGS',
+          notes: be.notes || '',
+        }))
+        setExpenses(mapped)
+        localStorage.setItem(storageKey, JSON.stringify(mapped))
+        return
+      }
+    } catch {
+      // ignore
+    }
+
+    const cached = localStorage.getItem(storageKey)
+    if (cached) {
+      try {
+        setExpenses(JSON.parse(cached))
+        return
+      } catch {}
+    }
+
+    if (wid === 1) {
+      setExpenses(INITIAL_EXPENSES)
+      localStorage.setItem(storageKey, JSON.stringify(INITIAL_EXPENSES))
+    } else {
+      setExpenses([])
+      localStorage.setItem(storageKey, JSON.stringify([]))
+    }
+  }
+
+  useEffect(() => {
+    const wid = getActiveWeddingId()
+    setWeddingId(wid)
+    loadExpenses(wid)
+
+    const handleUpdate = () => {
+      const newWid = getActiveWeddingId()
+      setWeddingId(newWid)
+      loadExpenses(newWid)
+    }
+    window.addEventListener('weddingos_wedding_updated', handleUpdate)
+    return () => window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+  }, [])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -305,32 +377,71 @@ export default function ExpensesPage() {
     setIsModalOpen(true)
   }
 
-  const handleDelete = (id: string, title: string) => {
+  const handleDelete = async (id: string, title: string) => {
     if (confirm(`Remove expense record "${title}"?`)) {
-      setExpenses(expenses.filter((e) => e.id !== id))
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        await expensesApi.delete(numId).catch(() => {})
+      }
+      const updated = expenses.filter((e) => e.id !== id)
+      setExpenses(updated)
+      localStorage.setItem(`weddingos_${weddingId}_expenses`, JSON.stringify(updated))
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    let updated: Expense[] = []
     if (editingExpense) {
-      setExpenses(
-        expenses.map((item) =>
-          item.id === editingExpense.id
-            ? {
-                ...item,
-                ...formData,
-              }
-            : item
-        )
+      const numId = Number(editingExpense.id)
+      if (!isNaN(numId)) {
+        await expensesApi
+          .update(numId, {
+            title: formData.title,
+            category: formData.category,
+            plannedAmount: formData.amount,
+            actualAmount: formData.amount,
+            vendorName: formData.vendorName,
+            notes: formData.notes,
+          })
+          .catch(() => {})
+      }
+      updated = expenses.map((item) =>
+        item.id === editingExpense.id
+          ? {
+              ...item,
+              ...formData,
+            }
+          : item
       )
     } else {
+      let createdId = `exp-${Date.now()}`
+      try {
+        const saved = await expensesApi.create(
+          {
+            title: formData.title,
+            category: formData.category,
+            plannedAmount: formData.amount,
+            actualAmount: formData.amount,
+            vendorName: formData.vendorName,
+            status: formData.paymentStatus as any,
+            notes: formData.notes,
+          },
+          weddingId
+        )
+        if (saved?.id) createdId = String(saved.id)
+      } catch {
+        // ignore
+      }
+
       const newExpense: Expense = {
-        id: `exp-${Date.now()}`,
+        id: createdId,
         ...formData,
       }
-      setExpenses([newExpense, ...expenses])
+      updated = [newExpense, ...expenses]
     }
+    setExpenses(updated)
+    localStorage.setItem(`weddingos_${weddingId}_expenses`, JSON.stringify(updated))
     setIsModalOpen(false)
   }
 

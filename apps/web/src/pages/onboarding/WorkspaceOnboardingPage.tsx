@@ -4,18 +4,19 @@ import { Button } from '../../components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Sparkles, Calendar, MapPin, Heart, ArrowRight, CheckCircle2 } from 'lucide-react'
+import { workspaceApi } from '../../services/apiClient'
 
 export default function WorkspaceOnboardingPage() {
   const navigate = useNavigate()
 
   // Form State matching API_DESIGN.md POST /api/v1/weddings
   const [formData, setFormData] = useState({
-    brideName: 'Aisha',
-    groomName: 'Imran',
-    weddingDate: '2027-02-18',
-    locationName: 'Bengaluru, Karnataka',
-    title: "Aisha & Imran's Wedding Celebration",
-    description: 'We warmly welcome our families and friends to celebrate our sacred union.',
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
+    title: '',
+    description: '',
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -25,7 +26,7 @@ export default function WorkspaceOnboardingPage() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }))
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
 
@@ -46,21 +47,60 @@ export default function WorkspaceOnboardingPage() {
 
     setIsLoading(true)
 
-    // Store in localStorage for client-side persistence during frontend prototyping
     try {
-      localStorage.setItem('weddingos_active_wedding', JSON.stringify({
-        ...formData,
-        id: 1,
-        createdAt: new Date().toISOString(),
-      }))
-    } catch {
-      // ignore
-    }
+      const slug = `${formData.brideName}-${formData.groomName}`
+        .toLowerCase()
+        .replace(/[^a-z0-9]/g, '-')
 
-    setTimeout(() => {
+      // 1. Create isolated wedding workspace in MySQL database
+      const created = await workspaceApi
+        .create({
+          brideName: formData.brideName.trim(),
+          groomName: formData.groomName.trim(),
+          weddingDate: formData.weddingDate,
+          city: formData.locationName.trim(),
+          venueName: formData.title.trim() || undefined,
+          slug,
+        })
+        .catch((err) => {
+          console.warn('Backend workspace creation offline, using local fallback:', err)
+          return {
+            id: Date.now(),
+            brideName: formData.brideName,
+            groomName: formData.groomName,
+            weddingDate: formData.weddingDate,
+            city: formData.locationName,
+          }
+        })
+
+      const workspaceData = {
+        id: created.id || 1,
+        brideName: created.brideName || formData.brideName,
+        groomName: created.groomName || formData.groomName,
+        weddingDate: created.weddingDate || formData.weddingDate,
+        locationName: created.city || formData.locationName,
+        title: formData.title || `${formData.brideName} & ${formData.groomName}'s Wedding`,
+        description: formData.description,
+        createdAt: new Date().toISOString(),
+      }
+
+      // 2. Persist active wedding session
+      localStorage.setItem('weddingos_active_wedding', JSON.stringify(workspaceData))
+      window.dispatchEvent(new Event('weddingos_wedding_updated'))
+
+      // 3. Reset local storage caches so new user starts completely fresh with 0 events & 0 guests
+      localStorage.removeItem('weddingos_events_custom')
+      localStorage.removeItem('weddingos_family_invitations')
+      localStorage.removeItem('weddingos_workspace_members')
+      localStorage.removeItem('weddingos_website_config')
+      localStorage.removeItem('weddingos_gallery_photos')
+
       setIsLoading(false)
       navigate('/app/dashboard')
-    }, 700)
+    } catch (err: any) {
+      setIsLoading(false)
+      setError(err?.message || 'Failed to initialize workspace')
+    }
   }
 
   return (

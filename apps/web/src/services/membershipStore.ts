@@ -7,12 +7,25 @@ import type {
 import { ALL_PERMISSIONS_ENABLED } from '../types/membership'
 import { membersApi, type BackendMembership } from './apiClient'
 
+function getActiveWeddingId(): number {
+  try {
+    const raw = localStorage.getItem('weddingos_active_wedding')
+    if (raw) return Number(JSON.parse(raw).id) || 1
+  } catch {}
+  return 1
+}
+
+function getMembersStorageKey(wid: number): string {
+  return `weddingos_${wid}_workspace_members`
+}
+
 const MEMBERS_STORAGE_KEY = 'weddingos_workspace_members'
 const INVITES_STORAGE_KEY = 'weddingos_organizer_invitations'
 
-export async function syncMembersFromBackend(weddingId = 1): Promise<WeddingMembership[]> {
+export async function syncMembersFromBackend(weddingId?: number): Promise<WeddingMembership[]> {
+  const wid = weddingId ?? getActiveWeddingId()
   try {
-    const backendMembers = await membersApi.getAll(weddingId)
+    const backendMembers = await membersApi.getAll(wid)
     if (backendMembers && backendMembers.length > 0) {
       const mapped: WeddingMembership[] = backendMembers.map((m: BackendMembership) => ({
         id: String(m.id),
@@ -173,9 +186,11 @@ export const DEFAULT_INVITATIONS: OrganizerInvitation[] = [
   },
 ]
 
-export function getMembers(): WeddingMembership[] {
+export function getMembers(weddingId?: number): WeddingMembership[] {
+  const wid = weddingId ?? getActiveWeddingId()
+  const key = getMembersStorageKey(wid)
   try {
-    const raw = localStorage.getItem(MEMBERS_STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
       if (Array.isArray(parsed) && parsed.length > 0) {
@@ -185,13 +200,35 @@ export function getMembers(): WeddingMembership[] {
   } catch (err) {
     console.error('Failed reading members from storage', err)
   }
-  saveMembers(DEFAULT_MEMBERS)
-  return DEFAULT_MEMBERS
+  if (wid === 1) {
+    saveMembers(DEFAULT_MEMBERS, 1)
+    return DEFAULT_MEMBERS
+  }
+  // For new workspace: default to the current session owner
+  const defaultOwner: WeddingMembership[] = [
+    {
+      id: `mem-${wid}-owner`,
+      weddingId: String(wid),
+      userId: `user-owner-${wid}`,
+      fullName: 'Workspace Owner',
+      email: 'owner@weddingos.app',
+      role: 'ADMIN',
+      title: 'Couple & Workspace Owner',
+      modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
+      joinedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      isCurrentSessionUser: true,
+    },
+  ]
+  saveMembers(defaultOwner, wid)
+  return defaultOwner
 }
 
-export function saveMembers(members: WeddingMembership[]): void {
+export function saveMembers(members: WeddingMembership[], weddingId?: number): void {
+  const wid = weddingId ?? getActiveWeddingId()
+  const key = getMembersStorageKey(wid)
   try {
-    localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members))
+    localStorage.setItem(key, JSON.stringify(members))
     window.dispatchEvent(new Event('weddingos_members_updated'))
   } catch (err) {
     console.error('Failed saving members to storage', err)

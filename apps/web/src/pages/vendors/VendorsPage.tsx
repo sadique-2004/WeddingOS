@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
+import { vendorsApi } from '../../services/apiClient'
 import {
   Briefcase,
   Plus,
@@ -271,7 +272,83 @@ const INITIAL_VENDORS: VendorContact[] = [
 ]
 
 export default function VendorsPage() {
-  const [vendors, setVendors] = useState<VendorContact[]>(INITIAL_VENDORS)
+  const getActiveWeddingId = (): number => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        return Number(parsed.id) || 1
+      }
+    } catch {
+      // ignore
+    }
+    return 1
+  }
+
+  const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
+  const [vendors, setVendors] = useState<VendorContact[]>([])
+
+  const loadVendors = async (wid: number) => {
+    const storageKey = `weddingos_${wid}_vendors`
+    try {
+      const backendVendors = await vendorsApi.getAll(wid)
+      if (backendVendors && Array.isArray(backendVendors)) {
+        const mapped: VendorContact[] = backendVendors.map((bv) => ({
+          id: String(bv.id),
+          name: bv.businessName,
+          category: (bv.category as VendorCategory) || 'Other',
+          contactPerson: bv.contactPerson || '',
+          phoneNumber: bv.phone || '',
+          email: bv.email || '',
+          agreedCost: bv.quotedAmount || 0,
+          currencyCode: 'INR',
+          contractStatus:
+            bv.status === 'CONFIRMED'
+              ? 'CONFIRMED'
+              : bv.status === 'DELIVERED'
+              ? 'COMPLETED'
+              : 'IN_DISCUSSION',
+          relatedCeremony: 'All Ceremonies',
+          notes: bv.notes || '',
+        }))
+        setVendors(mapped)
+        localStorage.setItem(storageKey, JSON.stringify(mapped))
+        return
+      }
+    } catch {
+      // ignore
+    }
+
+    const cached = localStorage.getItem(storageKey)
+    if (cached) {
+      try {
+        setVendors(JSON.parse(cached))
+        return
+      } catch {}
+    }
+
+    if (wid === 1) {
+      setVendors(INITIAL_VENDORS)
+      localStorage.setItem(storageKey, JSON.stringify(INITIAL_VENDORS))
+    } else {
+      setVendors([])
+      localStorage.setItem(storageKey, JSON.stringify([]))
+    }
+  }
+
+  useEffect(() => {
+    const wid = getActiveWeddingId()
+    setWeddingId(wid)
+    loadVendors(wid)
+
+    const handleUpdate = () => {
+      const newWid = getActiveWeddingId()
+      setWeddingId(newWid)
+      loadVendors(newWid)
+    }
+    window.addEventListener('weddingos_wedding_updated', handleUpdate)
+    return () => window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+  }, [])
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -406,32 +483,72 @@ export default function VendorsPage() {
     setIsModalOpen(true)
   }
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (confirm(`Remove vendor partner "${name}" from your active directory?`)) {
-      setVendors(vendors.filter((v) => v.id !== id))
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        await vendorsApi.delete(numId).catch(() => {})
+      }
+      const updated = vendors.filter((v) => v.id !== id)
+      setVendors(updated)
+      localStorage.setItem(`weddingos_${weddingId}_vendors`, JSON.stringify(updated))
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    let updated: VendorContact[] = []
     if (editingVendor) {
-      setVendors(
-        vendors.map((v) =>
-          v.id === editingVendor.id
-            ? {
-                ...v,
-                ...formData,
-              }
-            : v
-        )
+      const numId = Number(editingVendor.id)
+      if (!isNaN(numId)) {
+        await vendorsApi
+          .update(numId, {
+            businessName: formData.name,
+            category: formData.category,
+            contactPerson: formData.contactPerson,
+            phone: formData.phoneNumber,
+            email: formData.email,
+            quotedAmount: formData.agreedCost,
+            notes: formData.notes,
+          })
+          .catch(() => {})
+      }
+      updated = vendors.map((v) =>
+        v.id === editingVendor.id
+          ? {
+              ...v,
+              ...formData,
+            }
+          : v
       )
     } else {
+      let createdId = `ven-${Date.now()}`
+      try {
+        const saved = await vendorsApi.create(
+          {
+            businessName: formData.name,
+            category: formData.category,
+            contactPerson: formData.contactPerson,
+            phone: formData.phoneNumber,
+            email: formData.email,
+            quotedAmount: formData.agreedCost,
+            status: formData.contractStatus as any,
+            notes: formData.notes,
+          },
+          weddingId
+        )
+        if (saved?.id) createdId = String(saved.id)
+      } catch {
+        // ignore
+      }
       const newVendor: VendorContact = {
-        id: `ven-${Date.now()}`,
+        id: createdId,
         ...formData,
       }
-      setVendors([newVendor, ...vendors])
+      updated = [newVendor, ...vendors]
     }
+    setVendors(updated)
+    localStorage.setItem(`weddingos_${weddingId}_vendors`, JSON.stringify(updated))
     setIsModalOpen(false)
   }
 

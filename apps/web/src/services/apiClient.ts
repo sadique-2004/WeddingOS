@@ -52,7 +52,22 @@ export interface WorkspaceSummary {
 }
 
 export const workspaceApi = {
-  getActive: () => request<WorkspaceSummary>('/workspaces/active'),
+  getActive: (weddingId = 1) => request<WorkspaceSummary>(`/workspaces/active?weddingId=${weddingId}`),
+  getById: (weddingId: number) => request<WorkspaceSummary>(`/workspaces/${weddingId}`),
+  create: (data: {
+    ownerUserId?: number
+    brideName: string
+    groomName: string
+    weddingDate?: string
+    city: string
+    venueName?: string
+    totalBudgetTarget?: number
+    slug?: string
+  }) =>
+    request<any>('/workspaces', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   updateBudget: (totalBudgetTarget: number) =>
     request<any>('/workspaces/budget', {
       method: 'PUT',

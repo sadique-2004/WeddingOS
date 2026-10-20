@@ -42,7 +42,8 @@ public class WorkspaceController {
         LocalDate date = payload.containsKey("weddingDate") ? LocalDate.parse(payload.get("weddingDate").toString()) : null;
         String city = (String) payload.get("city");
         String venue = (String) payload.get("venueName");
-        BigDecimal budget = payload.containsKey("totalBudgetTarget") ? new BigDecimal(payload.get("totalBudgetTarget").toString()) : null;
+        BigDecimal budget = payload.containsKey("totalBudgetTarget") ? new BigDecimal(payload.get("totalBudgetTarget").toString())
+                : (payload.containsKey("totalBudget") ? new BigDecimal(payload.get("totalBudget").toString()) : null);
         Long ownerUserId = payload.containsKey("ownerUserId") ? Long.valueOf(payload.get("ownerUserId").toString()) : null;
         String slug = (String) payload.get("slug");
         return ResponseEntity.ok(workspaceService.createWorkspace(ownerUserId, bride, groom, date, city, venue, budget, slug));

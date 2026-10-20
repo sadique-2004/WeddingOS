@@ -20,6 +20,7 @@ import MembersPage from '../../pages/members/MembersPage'
 import SettingsPage from '../../pages/settings/SettingsPage'
 import GuestInvitePage from '../../pages/invite/GuestInvitePage'
 import PublicWeddingPage from '../../pages/public/PublicWeddingPage'
+import PublicGalleryPage from '../../pages/public/PublicGalleryPage'
 import ProtectedRoute from '../components/ProtectedRoute'
 import SsoCallbackPage from '../../pages/auth/SsoCallbackPage'
 
@@ -69,6 +70,14 @@ export const router = createBrowserRouter([
   {
     path: '/invite/:token',
     element: <GuestInvitePage />,
+  },
+  {
+    path: '/gallery/:slug',
+    element: <PublicGalleryPage />,
+  },
+  {
+    path: '/public/gallery/:slug',
+    element: <PublicGalleryPage />,
   },
   {
     path: '/app/onboarding',

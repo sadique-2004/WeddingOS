@@ -394,6 +394,12 @@ export default function PublicWeddingPage({
                 <span>Explore Celebrations</span>
                 <ChevronDown className="w-4 h-4" />
               </a>
+              <Link
+                to={config.slug ? `/gallery/${config.slug}` : '/gallery/royal-wedding'}
+                className="px-5 py-3 rounded-full bg-gradient-to-r from-[#b88444] to-[#e6bd81] text-[#3a0208] text-sm font-bold shadow-xl transition-all hover:scale-105 flex items-center gap-1.5"
+              >
+                <span>📸 Live Guest Gallery</span>
+              </Link>
               <button type="button" onClick={handleCopyShare} className="px-5 py-3 rounded-full bg-white/20 hover:bg-white/30 backdrop-blur-md border border-white/30 text-white text-sm font-semibold transition-all flex items-center gap-1.5 shadow-lg">
                 {copiedLink ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <Share2 className="w-4 h-4" />}
                 <span>{copiedLink ? 'Link Copied!' : 'Share Portal'}</span>

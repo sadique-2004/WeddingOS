@@ -4,9 +4,22 @@ import { invitationsApi, checkInApi, type BackendInvitation } from './apiClient'
 const STORAGE_KEY = 'weddingos_family_invitations'
 const LOGS_STORAGE_KEY = 'weddingos_checkin_logs'
 
-export async function syncInvitationsFromBackend(weddingId = 1): Promise<FamilyInvitation[]> {
+function getActiveWeddingId(): number {
   try {
-    const res = await invitationsApi.getAll(weddingId)
+    const raw = localStorage.getItem('weddingos_active_wedding')
+    if (raw) return Number(JSON.parse(raw).id) || 1
+  } catch {}
+  return 1
+}
+
+function getStorageKey(wid: number): string {
+  return `weddingos_${wid}_family_invitations`
+}
+
+export async function syncInvitationsFromBackend(weddingId?: number): Promise<FamilyInvitation[]> {
+  const wid = weddingId ?? getActiveWeddingId()
+  try {
+    const res = await invitationsApi.getAll(wid)
     if (res && res.invitations && res.invitations.length > 0) {
       const mapped: FamilyInvitation[] = res.invitations.map((inv: BackendInvitation) => ({
         id: `inv-${inv.id}`,
@@ -25,13 +38,13 @@ export async function syncInvitationsFromBackend(weddingId = 1): Promise<FamilyI
         checkedInBy: inv.checkedInBy || null,
         organizerNotes: inv.organizerNotes || '',
       }))
-      saveInvitations(mapped)
+      saveInvitations(mapped, wid)
       return mapped
     }
   } catch (err) {
     console.warn('Backend invitations sync offline or pending:', err)
   }
-  return getInvitations()
+  return getInvitations(wid)
 }
 
 // Initial sync trigger in browser environment
@@ -201,26 +214,33 @@ export const DEFAULT_LOGS: CheckInLogEntry[] = [
   },
 ]
 
-export function getInvitations(): FamilyInvitation[] {
+export function getInvitations(weddingId?: number): FamilyInvitation[] {
+  const wid = weddingId ?? getActiveWeddingId()
+  const key = getStorageKey(wid)
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
+    const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) {
+      if (Array.isArray(parsed)) {
         return parsed
       }
     }
   } catch (err) {
     console.error('Failed reading invitations from storage', err)
   }
-  // Initialize with defaults if empty
-  saveInvitations(DEFAULT_INVITATIONS)
-  return DEFAULT_INVITATIONS
+  // Initialize with defaults only if wedding 1 (seed demo)
+  if (wid === 1) {
+    saveInvitations(DEFAULT_INVITATIONS, 1)
+    return DEFAULT_INVITATIONS
+  }
+  return []
 }
 
-export function saveInvitations(invitations: FamilyInvitation[]): void {
+export function saveInvitations(invitations: FamilyInvitation[], weddingId?: number): void {
+  const wid = weddingId ?? getActiveWeddingId()
+  const key = getStorageKey(wid)
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(invitations))
+    localStorage.setItem(key, JSON.stringify(invitations))
     window.dispatchEvent(new Event('weddingos_invitations_updated'))
   } catch (err) {
     console.error('Failed saving invitations to storage', err)

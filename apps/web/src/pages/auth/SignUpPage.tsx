@@ -66,43 +66,28 @@ export default function SignUpPage() {
 
     setIsLoading(true)
 
-    // 1. Try Clerk registration if ready
-    if (isLoaded && signUp) {
-      try {
-        const parts = fullName.trim().split(' ')
-        const firstName = parts[0]
-        const lastName = parts.slice(1).join(' ') || undefined
-
-        await signUp.create({
-          emailAddress: email,
-          password: password,
-          firstName,
-          lastName,
-        })
-
-        // Send email verification code
-        await signUp.prepareEmailAddressVerification({ strategy: 'email_code' })
-        setPendingVerification(true)
-        setIsLoading(false)
-        return
-      } catch (err: any) {
-        console.warn('Clerk signUp error, falling back to local account registration:', err)
-      }
-    }
-
-    // 2. Direct Account Creation (takes credentials and creates the user account)
+    // 1. Direct Account Creation (registers the user instantly with their credentials)
     try {
       const user = registerLocalUser(fullName, email, password)
+
+      // Also attempt Clerk registration in background
+      if (isLoaded && signUp) {
+        try {
+          const parts = fullName.trim().split(' ')
+          signUp
+            .create({
+              emailAddress: email,
+              password: password,
+              firstName: parts[0],
+              lastName: parts.slice(1).join(' ') || undefined,
+            })
+            .catch(() => {})
+        } catch {
+          // ignore
+        }
+      }
+
       setIsLoading(false)
-      // Also notify backend in background if reachable
-      import('../../services/apiClient').then(({ membersApi }) => {
-        membersApi.invite({
-          fullName: user.fullName,
-          email: user.email,
-          role: 'ADMIN',
-          title: 'Bride & Workspace Co-Owner',
-        }).catch(() => {})
-      })
       navigate(redirectUrl)
     } catch (err: any) {
       setIsLoading(false)
