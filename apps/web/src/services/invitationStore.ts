@@ -1,7 +1,43 @@
 import type { FamilyInvitation, CheckInLogEntry } from '../types/invitation'
+import { invitationsApi, checkInApi, type BackendInvitation } from './apiClient'
 
 const STORAGE_KEY = 'weddingos_family_invitations'
 const LOGS_STORAGE_KEY = 'weddingos_checkin_logs'
+
+export async function syncInvitationsFromBackend(weddingId = 1): Promise<FamilyInvitation[]> {
+  try {
+    const res = await invitationsApi.getAll(weddingId)
+    if (res && res.invitations && res.invitations.length > 0) {
+      const mapped: FamilyInvitation[] = res.invitations.map((inv: BackendInvitation) => ({
+        id: `inv-${inv.id}`,
+        displayName: inv.displayName,
+        primaryContactName: inv.primaryContactName,
+        phoneNumber: inv.phoneNumber,
+        email: inv.email || '',
+        circle: inv.circle as any,
+        maxAttendees: inv.maxAttendees,
+        actualAttendees: inv.actualAttendees,
+        rsvpStatus: inv.rsvpStatus,
+        ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
+        dietaryNotes: inv.dietaryNotes || '',
+        invitationToken: inv.invitationToken,
+        checkedInAt: inv.checkedInAt || null,
+        checkedInBy: inv.checkedInBy || null,
+        organizerNotes: inv.organizerNotes || '',
+      }))
+      saveInvitations(mapped)
+      return mapped
+    }
+  } catch (err) {
+    console.warn('Backend invitations sync offline or pending:', err)
+  }
+  return getInvitations()
+}
+
+// Initial sync trigger in browser environment
+if (typeof window !== 'undefined') {
+  syncInvitationsFromBackend().catch(() => {})
+}
 
 export const DEFAULT_INVITATIONS: FamilyInvitation[] = [
   {
@@ -285,6 +321,9 @@ export function checkInFamilyInvitation(
 
   // If already checked in: return idempotent response with warning flag (FR-CHECK-04)
   if (existing.checkedInAt) {
+    checkInApi.scan(existing.invitationToken, existing.actualAttendees || existing.maxAttendees, organizerName)
+      .catch((e) => console.warn('Failed syncing duplicate scan to backend:', e))
+
     logCheckInAttempt({
       invitationId: existing.id,
       familyName: existing.displayName,
@@ -316,6 +355,9 @@ export function checkInFamilyInvitation(
 
   invitations[index] = updatedInvitation
   saveInvitations(invitations)
+
+  checkInApi.scan(existing.invitationToken, updatedInvitation.actualAttendees, organizerName)
+    .catch((e) => console.warn('Failed syncing check-in scan to backend:', e))
 
   logCheckInAttempt({
     invitationId: updatedInvitation.id,

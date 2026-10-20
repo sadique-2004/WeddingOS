@@ -5,9 +5,50 @@ import type {
   ModulePermissions,
 } from '../types/membership'
 import { ALL_PERMISSIONS_ENABLED } from '../types/membership'
+import { membersApi, type BackendMembership } from './apiClient'
 
 const MEMBERS_STORAGE_KEY = 'weddingos_workspace_members'
 const INVITES_STORAGE_KEY = 'weddingos_organizer_invitations'
+
+export async function syncMembersFromBackend(weddingId = 1): Promise<WeddingMembership[]> {
+  try {
+    const backendMembers = await membersApi.getAll(weddingId)
+    if (backendMembers && backendMembers.length > 0) {
+      const mapped: WeddingMembership[] = backendMembers.map((m: BackendMembership) => ({
+        id: String(m.id),
+        weddingId: String(weddingId),
+        userId: String(m.user?.id || m.id),
+        fullName: m.user?.fullName || 'Wedding Organizer',
+        email: m.user?.email || '',
+        role: m.role,
+        title: m.title || (m.role === 'ADMIN' ? 'Administrator' : 'Organizer'),
+        modulePermissions: {
+          events: m.canManageEvents ?? true,
+          tasks: m.canManageTasks ?? true,
+          invitations: m.canManageGuests ?? true,
+          check_in: m.canCheckInGuests ?? true,
+          expenses: m.canManageExpenses ?? false,
+          vendors: m.canManageVendors ?? false,
+          website: m.canManageWebsite ?? false,
+          gallery: m.canModerateGallery ?? true,
+        },
+        joinedAt: m.createdAt,
+        createdAt: m.createdAt,
+        isCurrentSessionUser: m.user?.email === 'aisha.sharma@weddingos.app',
+      }))
+      saveMembers(mapped)
+      return mapped
+    }
+  } catch (err) {
+    console.warn('Backend members sync offline or pending:', err)
+  }
+  return getMembers()
+}
+
+// Initial sync trigger in browser environment
+if (typeof window !== 'undefined') {
+  syncMembersFromBackend().catch(() => {})
+}
 
 export const DEFAULT_MEMBERS: WeddingMembership[] = [
   {
@@ -220,6 +261,22 @@ export function updateMemberRoleAndPermissions(
 
   members[index] = updated
   saveMembers(members)
+
+  const numericId = parseInt(memberId.replace(/\D/g, ''), 10)
+  if (!isNaN(numericId) && numericId > 0) {
+    membersApi.updateRole(numericId, newRole).catch((e) => console.warn('Failed syncing role update to backend:', e))
+    membersApi.updatePermissions(numericId, {
+      canManageEvents: updated.modulePermissions.events,
+      canManageTasks: updated.modulePermissions.tasks,
+      canManageGuests: updated.modulePermissions.invitations,
+      canCheckInGuests: updated.modulePermissions.check_in,
+      canManageExpenses: updated.modulePermissions.expenses,
+      canManageVendors: updated.modulePermissions.vendors,
+      canManageWebsite: updated.modulePermissions.website,
+      canModerateGallery: updated.modulePermissions.gallery,
+    }).catch((e) => console.warn('Failed syncing permissions update to backend:', e))
+  }
+
   return updated
 }
 
@@ -246,6 +303,11 @@ export function removeMember(memberId: string): void {
 
   const updated = members.filter((m) => m.id !== memberId)
   saveMembers(updated)
+
+  const numericId = parseInt(memberId.replace(/\D/g, ''), 10)
+  if (!isNaN(numericId) && numericId > 0) {
+    membersApi.remove(numericId).catch((e) => console.warn('Failed syncing member removal to backend:', e))
+  }
 }
 
 /**
@@ -258,7 +320,8 @@ export function inviteOrganizer(
   role: WorkspaceRole,
   permissions: ModulePermissions,
   inviterName: string = 'Aisha Sharma (Admin)',
-  inviterId: string = 'user-aisha-1'
+  inviterId: string = 'user-aisha-1',
+  title?: string
 ): OrganizerInvitation {
   const normalizedEmail = targetEmail.trim().toLowerCase()
   if (!normalizedEmail || !normalizedEmail.includes('@')) {
@@ -304,6 +367,17 @@ export function inviteOrganizer(
 
   const nextInvites = [newInvite, ...invites]
   saveOrganizerInvitations(nextInvites)
+
+  // Persist to backend
+  membersApi.invite({
+    fullName: targetName.trim() || normalizedEmail.split('@')[0],
+    email: normalizedEmail,
+    role: role,
+    title: title || (role === 'ADMIN' ? 'Co-Administrator' : 'Event Organizer'),
+  }).then(() => {
+    syncMembersFromBackend().catch(() => {})
+  }).catch((e) => console.warn('Failed syncing invite to backend:', e))
+
   return newInvite
 }
 
