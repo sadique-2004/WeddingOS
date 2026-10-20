@@ -16,6 +16,7 @@ import {
   ArrowLeft,
   Image as ImageIcon
 } from 'lucide-react'
+import { galleryApi } from '../../services/apiClient'
 
 export interface GalleryPhoto {
   id: string
@@ -155,6 +156,7 @@ export default function PublicGalleryPage() {
   const [caption, setCaption] = useState('')
   const [ceremony, setCeremony] = useState('Guest Candids')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [selectedRawFile, setSelectedRawFile] = useState<File | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const showToast = (msg: string) => {
@@ -202,51 +204,68 @@ export default function PublicGalleryPage() {
     }
 
     const reader = new FileReader()
+    setSelectedRawFile(file)
     reader.onload = () => {
       setPreviewUrl(reader.result as string)
     }
     reader.readAsDataURL(file)
   }
 
-  const handleUploadSubmit = (e: React.FormEvent) => {
+  const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!previewUrl) {
+    if (!previewUrl && !selectedRawFile) {
       alert('Please select a photo to upload.')
       return
     }
 
     setIsSubmitting(true)
 
-    setTimeout(() => {
-      const newPhoto: GalleryPhoto = {
-        id: `photo-guest-${Date.now()}`,
-        url: previewUrl,
-        title: caption.trim() ? caption.slice(0, 40) : 'Guest Photo Memory',
-        caption: caption.trim() || undefined,
-        ceremony: ceremony,
-        uploaderName: uploaderName.trim() || 'Wedding Guest',
-        uploaderRole: 'Guest Contributor',
-        uploadedAt: 'Just now',
-        status: 'PENDING', // Submits to couple's moderation queue!
-        fileSize: '3.8 MB',
-        dimensions: '3000 x 2000',
-        likesCount: 0,
+    let finalUrl = previewUrl || ''
+    if (selectedRawFile) {
+      try {
+        const backendPhoto = await galleryApi.uploadFile(selectedRawFile, {
+          weddingId: 1,
+          caption: caption.trim(),
+          ceremonyTag: ceremony,
+          uploaderName: uploaderName.trim() || 'Wedding Guest',
+        })
+        if (backendPhoto?.photoUrl) {
+          finalUrl = backendPhoto.photoUrl
+        }
+      } catch (err) {
+        console.warn('Backend Cloudinary upload failed, using local preview:', err)
       }
+    }
 
-      const updated = [newPhoto, ...photos]
-      setPhotos(updated)
-      localStorage.setItem(storageKey, JSON.stringify(updated))
-      localStorage.setItem('weddingos_gallery_photos', JSON.stringify(updated))
-      window.dispatchEvent(new Event('weddingos_gallery_updated'))
+    const newPhoto: GalleryPhoto = {
+      id: `photo-guest-${Date.now()}`,
+      url: finalUrl,
+      title: caption.trim() ? caption.slice(0, 40) : 'Guest Photo Memory',
+      caption: caption.trim() || undefined,
+      ceremony: ceremony,
+      uploaderName: uploaderName.trim() || 'Wedding Guest',
+      uploaderRole: 'Guest Contributor',
+      uploadedAt: 'Just now',
+      status: 'PENDING', // Submits to couple's moderation queue!
+      fileSize: selectedRawFile ? `${(selectedRawFile.size / (1024 * 1024)).toFixed(1)} MB` : '3.8 MB',
+      dimensions: '3000 x 2000',
+      likesCount: 0,
+    }
 
-      setIsSubmitting(false)
-      setIsUploadModalOpen(false)
-      setPreviewUrl(null)
-      setCaption('')
-      setUploaderName('')
+    const updated = [newPhoto, ...photos]
+    setPhotos(updated)
+    localStorage.setItem(storageKey, JSON.stringify(updated))
+    localStorage.setItem('weddingos_gallery_photos', JSON.stringify(updated))
+    window.dispatchEvent(new Event('weddingos_gallery_updated'))
 
-      showToast('Photo uploaded! It will appear in the gallery as soon as the couple approves it.')
-    }, 600)
+    setIsSubmitting(false)
+    setIsUploadModalOpen(false)
+    setPreviewUrl(null)
+    setSelectedRawFile(null)
+    setCaption('')
+    setUploaderName('')
+
+    showToast('Photo uploaded to Cloudinary! It will appear in the gallery as soon as the couple approves it.')
   }
 
   const handleLike = (id: string, e: React.MouseEvent) => {

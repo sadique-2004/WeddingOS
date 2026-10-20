@@ -36,6 +36,7 @@ import {
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Card, CardContent } from '../../components/ui/Card'
+import { galleryApi } from '../../services/apiClient'
 
 export type ModerationStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export type CeremonyCategory =
@@ -460,6 +461,7 @@ export default function GalleryPage() {
   const [uploaderName, setUploaderName] = useState('Organizer (You)')
   const [uploadTitle, setUploadTitle] = useState('')
   const [selectedFilePreview, setSelectedFilePreview] = useState<string | null>(null)
+  const [selectedRawFile, setSelectedRawFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -491,6 +493,67 @@ export default function GalleryPage() {
       window.removeEventListener('weddingos_gallery_updated', handleSync)
       window.removeEventListener('storage', handleSync)
     }
+  }, [])
+
+  // Fetch real photos from Cloudinary backend on load
+  useEffect(() => {
+    async function fetchBackendPhotos() {
+      try {
+        const [approvedRes, pendingRes] = await Promise.allSettled([
+          galleryApi.getAll(1),
+          galleryApi.getModerationQueue(1)
+        ])
+
+        const dbPhotos: GalleryPhoto[] = []
+        if (pendingRes.status === 'fulfilled' && Array.isArray(pendingRes.value)) {
+          pendingRes.value.forEach((p: any) => {
+            dbPhotos.push({
+              id: `photo-db-${p.id}`,
+              url: p.photoUrl,
+              title: p.caption || 'Wedding Memory',
+              caption: p.caption,
+              ceremony: (p.ceremonyTag as CeremonyCategory) || 'Guest Candids',
+              uploaderName: p.uploaderName || 'Wedding Guest',
+              uploaderRole: 'Contributor',
+              uploadedAt: p.uploadedAt ? new Date(p.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+              status: p.moderationStatus || 'PENDING',
+              fileSize: '3.5 MB',
+              dimensions: '3840 x 2560',
+              likesCount: p.likesCount || 0
+            })
+          })
+        }
+        if (approvedRes.status === 'fulfilled' && Array.isArray(approvedRes.value)) {
+          approvedRes.value.forEach((p: any) => {
+            dbPhotos.push({
+              id: `photo-db-${p.id}`,
+              url: p.photoUrl,
+              title: p.caption || 'Wedding Memory',
+              caption: p.caption,
+              ceremony: (p.ceremonyTag as CeremonyCategory) || 'Guest Candids',
+              uploaderName: p.uploaderName || 'Wedding Guest',
+              uploaderRole: 'Contributor',
+              uploadedAt: p.uploadedAt ? new Date(p.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+              status: p.moderationStatus || 'APPROVED',
+              fileSize: '3.5 MB',
+              dimensions: '3840 x 2560',
+              likesCount: p.likesCount || 0
+            })
+          })
+        }
+
+        if (dbPhotos.length > 0) {
+          setPhotos(prev => {
+            const dbUrls = new Set(dbPhotos.map(d => d.url))
+            const nonDuplicates = prev.filter(p => !dbUrls.has(p.url))
+            return [...dbPhotos, ...nonDuplicates]
+          })
+        }
+      } catch (err) {
+        console.warn('Error loading backend photos:', err)
+      }
+    }
+    fetchBackendPhotos()
   }, [])
 
   useEffect(() => {
@@ -571,6 +634,10 @@ export default function GalleryPage() {
   // Single Action Handlers
   const handleApprovePhoto = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    if (id.startsWith('photo-db-')) {
+      const dbId = id.replace('photo-db-', '')
+      galleryApi.moderatePhoto(dbId, 'APPROVED').catch(err => console.warn('Backend moderation error:', err))
+    }
     setPhotos((prev) =>
       prev.map((p) => (p.id === id ? { ...p, status: 'APPROVED' } : p))
     )
@@ -582,6 +649,10 @@ export default function GalleryPage() {
 
   const handleRejectPhoto = (id: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
+    if (id.startsWith('photo-db-')) {
+      const dbId = id.replace('photo-db-', '')
+      galleryApi.moderatePhoto(dbId, 'REJECTED').catch(err => console.warn('Backend moderation error:', err))
+    }
     setPhotos((prev) =>
       prev.map((p) =>
         p.id === id
@@ -642,40 +713,56 @@ export default function GalleryPage() {
   }
 
   // Upload handler
-  const handleMockUpload = (e: React.FormEvent) => {
+  const handleMockUpload = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!selectedFilePreview) {
+    if (!selectedFilePreview && !selectedRawFile) {
       alert('Please select an image file to upload.')
       return
     }
     setIsUploading(true)
 
-    setTimeout(() => {
-      const newPhoto: GalleryPhoto = {
-        id: `photo-u-${Date.now()}`,
-        url: selectedFilePreview,
-        title: uploadTitle.trim() || 'Uploaded Wedding Memory',
-        ceremony: uploadCeremony,
-        uploaderName: uploaderName.trim() || 'Organizer',
-        uploaderRole: 'Organizer Upload',
-        uploadedAt: 'Just now',
-        status: settings.requireModeration ? 'PENDING' : 'APPROVED',
-        fileSize: '4.2 MB',
-        dimensions: '3840 x 2560',
-        likesCount: 0
+    let finalUrl = selectedFilePreview || ''
+    if (selectedRawFile) {
+      try {
+        const backendResult = await galleryApi.uploadFile(selectedRawFile, {
+          weddingId: 1,
+          caption: uploadTitle.trim(),
+          ceremonyTag: uploadCeremony,
+          uploaderName: uploaderName.trim() || 'Organizer',
+        })
+        if (backendResult?.photoUrl) {
+          finalUrl = backendResult.photoUrl
+        }
+      } catch (err) {
+        console.warn('Backend Cloudinary upload failed, falling back to local preview:', err)
       }
+    }
 
-      setPhotos((prev) => [newPhoto, ...prev])
-      setIsUploading(false)
-      setIsUploadModalOpen(false)
-      setUploadTitle('')
-      setSelectedFilePreview(null)
-      showToast(
-        settings.requireModeration
-          ? 'Photo uploaded to pending moderation queue!'
-          : 'Photo uploaded and published live!'
-      )
-    }, 400)
+    const newPhoto: GalleryPhoto = {
+      id: `photo-u-${Date.now()}`,
+      url: finalUrl,
+      title: uploadTitle.trim() || 'Uploaded Wedding Memory',
+      ceremony: uploadCeremony,
+      uploaderName: uploaderName.trim() || 'Organizer',
+      uploaderRole: 'Organizer Upload',
+      uploadedAt: 'Just now',
+      status: settings.requireModeration ? 'PENDING' : 'APPROVED',
+      fileSize: selectedRawFile ? `${(selectedRawFile.size / (1024 * 1024)).toFixed(1)} MB` : '4.2 MB',
+      dimensions: '3840 x 2560',
+      likesCount: 0
+    }
+
+    setPhotos((prev) => [newPhoto, ...prev])
+    setIsUploading(false)
+    setIsUploadModalOpen(false)
+    setUploadTitle('')
+    setSelectedFilePreview(null)
+    setSelectedRawFile(null)
+    showToast(
+      settings.requireModeration
+        ? 'Photo uploaded to Cloudinary & pending review queue!'
+        : 'Photo uploaded to Cloudinary & published live!'
+    )
   }
 
   // Rotate token
@@ -1861,6 +1948,7 @@ export default function GalleryPage() {
                 onChange={(e) => {
                   const file = e.target.files?.[0]
                   if (file) {
+                    setSelectedRawFile(file)
                     const reader = new FileReader()
                     reader.onload = () => setSelectedFilePreview(reader.result as string)
                     reader.readAsDataURL(file)

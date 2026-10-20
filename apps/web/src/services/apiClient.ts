@@ -411,6 +411,7 @@ export interface BackendGalleryPhoto {
 
 export const galleryApi = {
   getAll: (weddingId = 1) => request<BackendGalleryPhoto[]>(`/gallery?weddingId=${weddingId}`),
+  getModerationQueue: (weddingId = 1) => request<BackendGalleryPhoto[]>(`/gallery/moderation?weddingId=${weddingId}`),
   upload: (
     data: {
       photoUrl: string
@@ -423,9 +424,35 @@ export const galleryApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  uploadFile: async (
+    file: File,
+    params: { weddingId?: number; caption?: string; ceremonyTag?: string; uploaderName?: string } = {}
+  ): Promise<BackendGalleryPhoto> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (params.weddingId) formData.append('weddingId', String(params.weddingId))
+    if (params.caption) formData.append('caption', params.caption)
+    if (params.ceremonyTag) formData.append('ceremonyTag', params.ceremonyTag)
+    if (params.uploaderName) formData.append('uploaderName', params.uploaderName)
+
+    const response = await fetch(`${API_BASE_URL}/gallery/upload-file`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+    return response.json()
+  },
+  moderatePhoto: (id: number | string, status: 'APPROVED' | 'REJECTED') =>
+    request<BackendGalleryPhoto>(`/gallery/${id}/moderate`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
+    }),
   updateStatus: (id: number, status: 'APPROVED' | 'REJECTED') =>
-    request<BackendGalleryPhoto>(`/gallery/${id}/status?status=${status}`, {
-      method: 'PUT',
+    request<BackendGalleryPhoto>(`/gallery/${id}/moderate`, {
+      method: 'POST',
+      body: JSON.stringify({ status }),
     }),
   delete: (id: number) =>
     request<void>(`/gallery/${id}`, {

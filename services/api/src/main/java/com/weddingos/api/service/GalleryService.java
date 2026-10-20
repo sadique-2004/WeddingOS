@@ -15,10 +15,12 @@ public class GalleryService {
 
     private final GalleryPhotoRepository photoRepository;
     private final WeddingRepository weddingRepository;
+    private final CloudinaryService cloudinaryService;
 
-    public GalleryService(GalleryPhotoRepository photoRepository, WeddingRepository weddingRepository) {
+    public GalleryService(GalleryPhotoRepository photoRepository, WeddingRepository weddingRepository, CloudinaryService cloudinaryService) {
         this.photoRepository = photoRepository;
         this.weddingRepository = weddingRepository;
+        this.cloudinaryService = cloudinaryService;
     }
 
     @Transactional(readOnly = true)
@@ -36,6 +38,22 @@ public class GalleryService {
                 .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
         photo.setWedding(wedding);
         photo.setModerationStatus(GalleryPhoto.ModerationStatus.PENDING);
+        return photoRepository.save(photo);
+    }
+
+    public GalleryPhoto uploadPhotoFile(Long weddingId, org.springframework.web.multipart.MultipartFile file, String caption, String ceremonyTag, String uploaderName) throws java.io.IOException {
+        Wedding wedding = weddingRepository.findById(weddingId)
+                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+
+        String secureUrl = cloudinaryService.uploadImage(file, "weddingos/photos");
+
+        GalleryPhoto photo = new GalleryPhoto();
+        photo.setWedding(wedding);
+        photo.setPhotoUrl(secureUrl);
+        photo.setCaption(caption);
+        photo.setUploaderName(uploaderName != null && !uploaderName.trim().isEmpty() ? uploaderName : "Wedding Guest");
+        photo.setModerationStatus(GalleryPhoto.ModerationStatus.PENDING);
+        photo.setIsHighlight(false);
         return photoRepository.save(photo);
     }
 

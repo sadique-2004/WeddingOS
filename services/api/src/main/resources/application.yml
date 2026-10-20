@@ -21,6 +21,12 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MySQLDialect
 
+  servlet:
+    multipart:
+      enabled: true
+      max-file-size: 25MB
+      max-request-size: 50MB
+
 # OpenAPI / Swagger UI Documentation Configuration
 springdoc:
   api-docs:
@@ -29,3 +35,7 @@ springdoc:
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: method
+
+cloudinary:
+  url: ${CLOUDINARY_URL:cloudinary://499643659481896:0gqQHwqIuYAjrsaUXFR8bInJk8o@h2diirow}
+
