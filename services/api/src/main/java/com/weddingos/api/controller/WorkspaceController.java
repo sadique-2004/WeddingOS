@@ -58,12 +58,16 @@ public class WorkspaceController {
 
     @PutMapping("/details")
     @Operation(summary = "Update wedding general details and countdown date")
-    public ResponseEntity<Wedding> updateDetails(@RequestBody Map<String, String> payload) {
+    public ResponseEntity<Wedding> updateDetails(
+            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestBody Map<String, String> payload) {
         String bride = payload.get("brideName");
         String groom = payload.get("groomName");
-        LocalDate date = payload.containsKey("weddingDate") ? LocalDate.parse(payload.get("weddingDate")) : null;
+        LocalDate date = (payload.containsKey("weddingDate") && payload.get("weddingDate") != null && !payload.get("weddingDate").isEmpty())
+                ? LocalDate.parse(payload.get("weddingDate")) : null;
         String city = payload.get("city");
         String venue = payload.get("venueName");
-        return ResponseEntity.ok(workspaceService.updateWeddingDetails(1L, bride, groom, date, city, venue));
+        String slug = payload.get("slug");
+        return ResponseEntity.ok(workspaceService.updateWeddingDetails(weddingId, bride, groom, date, city, venue, slug));
     }
 }

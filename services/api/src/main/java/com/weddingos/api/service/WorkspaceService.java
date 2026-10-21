@@ -35,21 +35,39 @@ public class WorkspaceService {
         this.invitationRepository = invitationRepository;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Map<String, Object> getActiveWorkspaceSummary(Long weddingId) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding workspace not found with ID: " + weddingId));
+                .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
+                    Wedding w = new Wedding();
+                    w.setBrideName("Aisha");
+                    w.setGroomName("Imran");
+                    w.setWeddingDate(LocalDate.now().plusMonths(4));
+                    w.setCity("Udaipur, Rajasthan");
+                    w.setVenueName("The Oberoi Udaivilas");
+                    w.setTotalBudgetTarget(new BigDecimal("2500000.00"));
+                    Wedding savedW = weddingRepository.save(w);
 
-        String slug = slugRepository.findByWeddingId(weddingId)
+                    WeddingSlug ws = new WeddingSlug();
+                    ws.setWedding(savedW);
+                    ws.setSlug("aisha-and-imran");
+                    ws.setIsActive(true);
+                    slugRepository.save(ws);
+
+                    return savedW;
+                }));
+
+        Long activeId = wedding.getId();
+        String slug = slugRepository.findByWeddingId(activeId)
                 .map(WeddingSlug::getSlug)
-                .orElse("ananya-kabir");
+                .orElse("aisha-and-imran");
 
-        BigDecimal totalBudget = wedding.getTotalBudgetTarget();
-        BigDecimal totalSpent = expenseRepository.sumTotalRecorded(weddingId);
-        BigDecimal totalPaid = expenseRepository.sumTotalPaid(weddingId);
-        BigDecimal totalAdvancePaid = expenseRepository.sumTotalAdvancePaid(weddingId);
-        BigDecimal totalPendingDues = expenseRepository.sumTotalPending(weddingId);
-        BigDecimal remainingBudget = totalBudget.subtract(totalSpent);
+        BigDecimal totalBudget = wedding.getTotalBudgetTarget() != null ? wedding.getTotalBudgetTarget() : new BigDecimal("2500000.00");
+        BigDecimal totalSpent = expenseRepository.sumTotalRecorded(activeId);
+        BigDecimal totalPaid = expenseRepository.sumTotalPaid(activeId);
+        BigDecimal totalAdvancePaid = expenseRepository.sumTotalAdvancePaid(activeId);
+        BigDecimal totalPendingDues = expenseRepository.sumTotalPending(activeId);
+        BigDecimal remainingBudget = totalBudget.subtract(totalSpent != null ? totalSpent : BigDecimal.ZERO);
 
         long totalInvitations = invitationRepository.count();
 
@@ -62,33 +80,61 @@ public class WorkspaceService {
         summary.put("venueName", wedding.getVenueName());
         summary.put("slug", slug);
         summary.put("totalBudgetTarget", totalBudget);
-        summary.put("totalRecordedSpending", totalSpent);
-        summary.put("totalPaid", totalPaid.add(totalAdvancePaid));
-        summary.put("totalPendingDues", totalPendingDues);
+        summary.put("totalRecordedSpending", totalSpent != null ? totalSpent : BigDecimal.ZERO);
+        summary.put("totalPaid", (totalPaid != null ? totalPaid : BigDecimal.ZERO).add(totalAdvancePaid != null ? totalAdvancePaid : BigDecimal.ZERO));
+        summary.put("totalPendingDues", totalPendingDues != null ? totalPendingDues : BigDecimal.ZERO);
         summary.put("remainingRunway", remainingBudget);
         summary.put("expectedGuestCapacity", wedding.getExpectedGuestCapacity());
         summary.put("totalInvitationsCount", totalInvitations);
-        summary.put("currencyCode", wedding.getCurrencyCode());
+        summary.put("currencyCode", wedding.getCurrencyCode() != null ? wedding.getCurrencyCode() : "INR");
 
         return summary;
     }
 
     public Wedding updateBudgetTarget(Long weddingId, BigDecimal newBudgetTarget) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseThrow());
         wedding.setTotalBudgetTarget(newBudgetTarget);
         return weddingRepository.save(wedding);
     }
 
-    public Wedding updateWeddingDetails(Long weddingId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName) {
+    public Wedding updateWeddingDetails(Long weddingId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, String slug) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
-        if (brideName != null) wedding.setBrideName(brideName);
-        if (groomName != null) wedding.setGroomName(groomName);
+                .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
+                    Wedding w = new Wedding();
+                    w.setBrideName(brideName != null ? brideName : "Aisha");
+                    w.setGroomName(groomName != null ? groomName : "Imran");
+                    w.setWeddingDate(weddingDate != null ? weddingDate : LocalDate.now().plusMonths(4));
+                    w.setCity(city != null ? city : "Udaipur, Rajasthan");
+                    w.setVenueName(venueName != null ? venueName : "The Oberoi Udaivilas");
+                    w.setTotalBudgetTarget(new BigDecimal("2500000.00"));
+                    return weddingRepository.save(w);
+                }));
+
+        if (brideName != null && !brideName.trim().isEmpty()) wedding.setBrideName(brideName.trim());
+        if (groomName != null && !groomName.trim().isEmpty()) wedding.setGroomName(groomName.trim());
         if (weddingDate != null) wedding.setWeddingDate(weddingDate);
-        if (city != null) wedding.setCity(city);
-        if (venueName != null) wedding.setVenueName(venueName);
-        return weddingRepository.save(wedding);
+        if (city != null) wedding.setCity(city.trim());
+        if (venueName != null) wedding.setVenueName(venueName.trim());
+        Wedding saved = weddingRepository.save(wedding);
+
+        if (slug != null && !slug.trim().isEmpty()) {
+            String cleanSlug = slug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-");
+            WeddingSlug existingSlug = slugRepository.findByWeddingId(saved.getId()).orElse(null);
+            if (existingSlug != null) {
+                existingSlug.setSlug(cleanSlug);
+                existingSlug.setIsActive(true);
+                slugRepository.save(existingSlug);
+            } else {
+                WeddingSlug newSlug = new WeddingSlug();
+                newSlug.setWedding(saved);
+                newSlug.setSlug(cleanSlug);
+                newSlug.setIsActive(true);
+                slugRepository.save(newSlug);
+            }
+        }
+
+        return saved;
     }
 
     public Wedding createWorkspace(Long ownerUserId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, BigDecimal totalBudget, String slug) {

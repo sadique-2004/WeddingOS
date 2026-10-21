@@ -73,18 +73,23 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify({ totalBudgetTarget }),
     }),
-  updateDetails: (details: {
-    brideName: string
-    groomName: string
-    weddingDate?: string
-    city: string
-    venueName: string
-  }) =>
-    request<any>('/workspaces/details', {
+  updateDetails: (
+    details: {
+      brideName: string
+      groomName: string
+      weddingDate?: string
+      city?: string
+      venueName?: string
+      slug?: string
+    },
+    weddingId = 1
+  ) =>
+    request<any>(`/workspaces/details?weddingId=${weddingId}`, {
       method: 'PUT',
       body: JSON.stringify(details),
     }),
 }
+export const workspacesApi = workspaceApi
 
 // ---------------- Events ----------------
 export interface BackendWeddingEvent {

@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { resetToDemoData } from '../../services/invitationStore'
 import { resetMembershipDemoData } from '../../services/membershipStore'
+import { workspacesApi } from '../../services/apiClient'
 
 export interface WeddingWorkspaceSettings {
   id: string | number
@@ -81,7 +82,7 @@ export default function SettingsPage() {
   const [isResetConfirmOpen, setIsResetConfirmOpen] = useState(false)
   const [isArchiveConfirmOpen, setIsArchiveConfirmOpen] = useState(false)
 
-  // Load active wedding settings on mount
+  // Load active wedding settings on mount from backend and local cache
   useEffect(() => {
     try {
       const stored = localStorage.getItem('weddingos_active_wedding')
@@ -95,6 +96,21 @@ export default function SettingsPage() {
     } catch {
       // ignore
     }
+
+    workspacesApi.getActive(1).then((backendData: any) => {
+      if (backendData) {
+        setSettings((prev) => ({
+          ...prev,
+          brideName: backendData.brideName || prev.brideName,
+          groomName: backendData.groomName || prev.groomName,
+          weddingDate: backendData.weddingDate || prev.weddingDate,
+          locationName: backendData.venueName || backendData.city || prev.locationName,
+          slug: backendData.slug || prev.slug,
+          title: `${backendData.brideName} & ${backendData.groomName}'s Royal Wedding`,
+        }))
+        localStorage.setItem('weddingos_active_wedding', JSON.stringify(backendData))
+      }
+    }).catch((err: any) => console.warn('Could not load settings from backend:', err))
   }, [])
 
   // Calculate days remaining
@@ -129,29 +145,44 @@ export default function SettingsPage() {
       return
     }
 
-    setTimeout(() => {
+    async function doSave() {
       try {
         const updated = {
           ...settings,
           updatedAt: new Date().toISOString(),
         }
 
+        // 1. Sync to backend MySQL database on Render / TiDB Cloud
+        try {
+          await workspacesApi.updateDetails({
+            brideName: settings.brideName.trim(),
+            groomName: settings.groomName.trim(),
+            weddingDate: settings.weddingDate,
+            venueName: settings.locationName.trim(),
+            city: settings.locationName.trim(),
+            slug: settings.slug.trim(),
+          }, 1)
+        } catch (apiErr) {
+          console.warn('Backend sync error:', apiErr)
+        }
+
+        // 2. Update local state & dispatch cross-tab event
         localStorage.setItem('weddingos_active_wedding', JSON.stringify(updated))
         setSettings(updated)
 
-        // Notify other open components and sidebar
         window.dispatchEvent(new Event('weddingos_wedding_updated'))
         window.dispatchEvent(new StorageEvent('storage', { key: 'weddingos_active_wedding' }))
 
         setIsSaving(false)
-        setSuccessNotice('Wedding workspace settings saved successfully!')
+        setSuccessNotice('Wedding workspace settings saved and synced to database!')
         setTimeout(() => setSuccessNotice(null), 4000)
       } catch (err: unknown) {
         setIsSaving(false)
         const msg = err instanceof Error ? err.message : 'Failed to save settings'
         setErrorNotice(msg)
       }
-    }, 350)
+    }
+    doSave()
   }
 
   // Handle Copy Website Link

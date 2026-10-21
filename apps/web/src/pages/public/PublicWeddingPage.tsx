@@ -16,6 +16,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 import type { PublicWebsiteConfig } from '../../types/website'
+import { websiteApi, workspacesApi } from '../../services/apiClient'
 export type { PublicWebsiteConfig } from '../../types/website'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
@@ -150,8 +151,53 @@ export default function PublicWeddingPage({
   useEffect(() => {
     if (previewConfig) {
       setConfig(previewConfig)
+      return
     }
-  }, [previewConfig])
+
+    async function loadBackendData() {
+      try {
+        if (slug) {
+          const publicData = await websiteApi.getPublic(slug).catch(() => null)
+          if (publicData) {
+            setConfig((prev) => ({
+              ...prev,
+              brideName: publicData.brideName || prev.brideName,
+              groomName: publicData.groomName || prev.groomName,
+              weddingDate: publicData.weddingDate || prev.weddingDate,
+              locationName: publicData.venueName || publicData.city || prev.locationName,
+              themeKey: (publicData.themeKey as any) || prev.themeKey,
+              welcomeHeadline: publicData.welcomeHeadline || prev.welcomeHeadline,
+              welcomeMessage: publicData.welcomeMessage || prev.welcomeMessage,
+              isPublished: publicData.isPublished !== undefined ? publicData.isPublished : prev.isPublished,
+              showSchedule: publicData.showSchedule !== undefined ? publicData.showSchedule : prev.showSchedule,
+              showDressCode: publicData.showDressCode !== undefined ? publicData.showDressCode : prev.showDressCode,
+              showVenues: publicData.showVenues !== undefined ? publicData.showVenues : prev.showVenues,
+              showLivestream: publicData.showLivestream !== undefined ? publicData.showLivestream : prev.showLivestream,
+              livestreamUrl: publicData.livestreamUrl || prev.livestreamUrl,
+              slug: publicData.slug || slug,
+            }))
+            return
+          }
+        }
+
+        const activeWorkspace = await workspacesApi.getActive(1).catch(() => null)
+        if (activeWorkspace) {
+          setConfig((prev) => ({
+            ...prev,
+            brideName: activeWorkspace.brideName || prev.brideName,
+            groomName: activeWorkspace.groomName || prev.groomName,
+            weddingDate: activeWorkspace.weddingDate || prev.weddingDate,
+            locationName: activeWorkspace.venueName || activeWorkspace.city || prev.locationName,
+            slug: activeWorkspace.slug || prev.slug,
+          }))
+        }
+      } catch (err) {
+        console.warn('Could not load public wedding data from backend:', err)
+      }
+    }
+
+    loadBackendData()
+  }, [slug, previewConfig])
 
   // Continuous real-time countdown timer that ticks every 1 second
   useEffect(() => {

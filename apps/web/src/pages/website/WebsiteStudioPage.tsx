@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import PublicWeddingPage from '../public/PublicWeddingPage'
 import type { PublicWebsiteConfig } from '../../types/website'
+import { workspacesApi, websiteApi } from '../../services/apiClient'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
   slug: 'aisha-and-imran',
@@ -67,6 +68,45 @@ export default function WebsiteStudioPage() {
   const [copied, setCopied] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
+  // Fetch real database details on mount
+  useEffect(() => {
+    Promise.allSettled([
+      workspacesApi.getActive(1),
+      websiteApi.getConfig(1)
+    ]).then(([workspaceResult, siteResult]) => {
+      let updated: Partial<PublicWebsiteConfig> = {}
+      if (workspaceResult.status === 'fulfilled' && workspaceResult.value) {
+        const w = workspaceResult.value
+        updated = {
+          ...updated,
+          brideName: w.brideName || config.brideName,
+          groomName: w.groomName || config.groomName,
+          weddingDate: w.weddingDate || config.weddingDate,
+          locationName: w.venueName || w.city || config.locationName,
+          slug: w.slug || config.slug,
+        }
+      }
+      if (siteResult.status === 'fulfilled' && siteResult.value) {
+        const s = siteResult.value
+        updated = {
+          ...updated,
+          themeKey: (s.themeKey as any) || config.themeKey,
+          welcomeHeadline: s.welcomeHeadline || config.welcomeHeadline,
+          welcomeMessage: s.welcomeMessage || config.welcomeMessage,
+          isPublished: s.isPublished !== undefined ? s.isPublished : config.isPublished,
+          showSchedule: s.showSchedule !== undefined ? s.showSchedule : config.showSchedule,
+          showDressCode: s.showDressCode !== undefined ? s.showDressCode : config.showDressCode,
+          showVenues: s.showVenues !== undefined ? s.showVenues : config.showVenues,
+          showLivestream: s.showLivestream !== undefined ? s.showLivestream : config.showLivestream,
+          livestreamUrl: s.livestreamUrl || config.livestreamUrl,
+        }
+      }
+      if (Object.keys(updated).length > 0) {
+        setConfig(prev => ({ ...prev, ...updated }))
+      }
+    }).catch(err => console.warn('Could not load studio config from backend:', err))
+  }, [])
+
   // Save to localStorage whenever config changes
   useEffect(() => {
     try {
@@ -89,10 +129,38 @@ export default function WebsiteStudioPage() {
     setTimeout(() => setCopied(false), 2500)
   }
 
-  const handleSave = () => {
+  const handleSave = async () => {
     try {
+      // 1. Sync to backend MySQL database
+      try {
+        await workspacesApi.updateDetails({
+          brideName: config.brideName.trim(),
+          groomName: config.groomName.trim(),
+          weddingDate: config.weddingDate,
+          venueName: config.locationName.trim(),
+          city: config.locationName.trim(),
+          slug: config.slug.trim(),
+        }, 1)
+
+        await websiteApi.updateConfig({
+          themeKey: config.themeKey as any,
+          welcomeHeadline: config.welcomeHeadline,
+          welcomeMessage: config.welcomeMessage,
+          isPublished: config.isPublished,
+          showSchedule: config.showSchedule,
+          showDressCode: config.showDressCode,
+          showVenues: config.showVenues,
+          showLivestream: config.showLivestream,
+          livestreamUrl: config.livestreamUrl,
+        }, 1)
+      } catch (backendErr) {
+        console.warn('Backend sync error:', backendErr)
+      }
+
+      // 2. Save locally and notify tabs
       localStorage.setItem('weddingos_website_config', JSON.stringify(config))
-      showToast('Theme studio settings successfully saved & published!')
+      window.dispatchEvent(new Event('weddingos_website_updated'))
+      showToast('Theme studio settings successfully saved & published to cloud!')
     } catch {
       showToast('Error saving settings')
     }

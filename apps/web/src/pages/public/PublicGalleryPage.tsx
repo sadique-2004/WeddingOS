@@ -16,7 +16,7 @@ import {
   ArrowLeft,
   Image as ImageIcon
 } from 'lucide-react'
-import { galleryApi } from '../../services/apiClient'
+import { galleryApi, workspacesApi } from '../../services/apiClient'
 
 export interface GalleryPhoto {
   id: string
@@ -183,6 +183,48 @@ export default function PublicGalleryPage() {
       window.removeEventListener('storage', handleUpdate)
     }
   }, [storageKey])
+
+  // Fetch approved photos and couple details from backend
+  useEffect(() => {
+    // 1. Fetch real couple names
+    workspacesApi.getActive(1).then((active: any) => {
+      if (active) {
+        setWedding((prev: any) => ({
+          ...prev,
+          id: active.id || prev.id,
+          brideName: active.brideName || prev.brideName,
+          groomName: active.groomName || prev.groomName,
+          city: active.venueName || active.city || prev.city,
+        }))
+      }
+    }).catch((err: any) => console.warn('Could not load active wedding:', err))
+
+    // 2. Fetch approved Cloudinary photos
+    galleryApi.getAll(1).then((backendPhotos) => {
+      if (Array.isArray(backendPhotos) && backendPhotos.length > 0) {
+        const mapped: GalleryPhoto[] = backendPhotos.map((p: any) => ({
+          id: `photo-db-${p.id}`,
+          url: p.photoUrl,
+          title: p.caption || 'Wedding Memory',
+          caption: p.caption,
+          ceremony: p.ceremonyTag || 'Guest Candids',
+          uploaderName: p.uploaderName || 'Wedding Guest',
+          uploaderRole: 'Guest Contributor',
+          uploadedAt: p.uploadedAt ? new Date(p.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+          status: 'APPROVED',
+          fileSize: '3.5 MB',
+          dimensions: '3840 x 2560',
+          likesCount: p.likesCount || 0,
+        }))
+
+        setPhotos((prev) => {
+          const dbUrls = new Set(mapped.map((m) => m.url))
+          const nonDuplicates = prev.filter((p) => !dbUrls.has(p.url))
+          return [...mapped, ...nonDuplicates]
+        })
+      }
+    }).catch((err) => console.warn('Could not load approved photos from backend:', err))
+  }, [])
 
   // Approved Photos Only for public stream
   const approvedPhotos = useMemo(() => {
