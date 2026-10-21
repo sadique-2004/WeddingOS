@@ -74,6 +74,12 @@ public class WorkspaceService {
             try {
                 jdbcTemplate.execute("ALTER TABLE weddings MODIFY COLUMN city VARCHAR(120) NULL");
             } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE preparation_tasks MODIFY COLUMN priority VARCHAR(50) NOT NULL DEFAULT 'NORMAL'");
+            } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE preparation_tasks MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'TODO'");
+            } catch (Exception ignored) {}
         }
     }
 

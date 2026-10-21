@@ -118,8 +118,8 @@ CREATE TABLE IF NOT EXISTS preparation_tasks (
     assigned_user_id BIGINT NULL,
     title VARCHAR(255) NOT NULL,
     category VARCHAR(60) NOT NULL, -- Attire, Decor, Logistics, Rituals, Catering, Legal
-    priority ENUM('URGENT', 'HIGH', 'NORMAL', 'LOW') NOT NULL DEFAULT 'NORMAL',
-    status ENUM('TODO', 'IN_PROGRESS', 'COMPLETED') NOT NULL DEFAULT 'TODO',
+    priority VARCHAR(50) NOT NULL DEFAULT 'NORMAL',
+    status VARCHAR(50) NOT NULL DEFAULT 'TODO',
     due_date DATE NULL,
     completed_at DATETIME(3) NULL,
     created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),

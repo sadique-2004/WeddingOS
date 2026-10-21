@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 public class PreparationTask {
 
     public enum Priority {
-        URGENT, HIGH, NORMAL, LOW
+        URGENT, HIGH, MEDIUM, NORMAL, LOW, CRITICAL
     }
 
     public enum Status {

@@ -36,6 +36,15 @@ public class TaskService {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
         task.setWedding(wedding);
+        if (task.getCategory() == null || task.getCategory().isBlank()) {
+            task.setCategory("General");
+        }
+        if (task.getPriority() == null) {
+            task.setPriority(PreparationTask.Priority.NORMAL);
+        }
+        if (task.getStatus() == null) {
+            task.setStatus(PreparationTask.Status.TODO);
+        }
         return taskRepository.save(task);
     }
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { tasksApi } from '../../services/apiClient'
+import { tasksApi, getActiveWeddingId } from '../../services/apiClient'
 import {
   CheckCircle2,
   Circle,
@@ -34,19 +34,6 @@ export interface Task {
 const INITIAL_TASKS: Task[] = []
 
 export default function TasksPage() {
-  const getActiveWeddingId = (): number => {
-    try {
-      const stored = localStorage.getItem('weddingos_active_wedding')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        return Number(parsed.id) || 1
-      }
-    } catch {
-      // ignore
-    }
-    return 1
-  }
-
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
   const [tasks, setTasks] = useState<Task[]>([])
 
@@ -138,13 +125,21 @@ export default function TasksPage() {
     setDragOverColumn(null)
   }
 
-  const handleDrop = (e: React.DragEvent, newStatus: Task['status']) => {
+  const handleDrop = async (e: React.DragEvent, newStatus: Task['status']) => {
     e.preventDefault()
     const id = e.dataTransfer.getData('text/plain') || draggedTaskId
     if (id) {
-      setTasks((prev) =>
-        prev.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
-      )
+      const wid = weddingId || getActiveWeddingId()
+      const updated = tasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t))
+      setTasks(updated)
+      localStorage.setItem(`weddingos_${wid}_tasks`, JSON.stringify(updated))
+
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        tasksApi.update(numId, { status: newStatus }).catch((err) => {
+          console.warn('Could not sync kanban move to backend:', err)
+        })
+      }
     }
     setDraggedTaskId(null)
     setDragOverColumn(null)
@@ -169,10 +164,10 @@ export default function TasksPage() {
       description: '',
       priority: 'MEDIUM',
       status: 'TODO',
-      dueDate: '2026-12-01',
-      assigneeName: 'Devika Sharma',
-      assigneeRole: 'Master Wedding Planner',
-      relatedCeremony: 'Sangeet & Cocktail',
+      dueDate: new Date(Date.now() + 7 * 86400000).toISOString().split('T')[0],
+      assigneeName: 'Organizer',
+      assigneeRole: 'Core Team',
+      relatedCeremony: 'General',
     })
     setIsModalOpen(true)
   }
@@ -187,88 +182,102 @@ export default function TasksPage() {
       dueDate: tsk.dueDate,
       assigneeName: tsk.assigneeName,
       assigneeRole: tsk.assigneeRole,
-      relatedCeremony: tsk.relatedCeremony || 'All Ceremonies',
+      relatedCeremony: tsk.relatedCeremony || 'General',
     })
     setIsModalOpen(true)
   }
 
   const handleToggleStatus = async (id: string) => {
+    const target = tasks.find((t) => t.id === id)
+    if (!target) return
+    const nextStatus: Task['status'] =
+      target.status === 'COMPLETED'
+        ? 'TODO'
+        : target.status === 'TODO'
+        ? 'IN_PROGRESS'
+        : 'COMPLETED'
+
+    const wid = weddingId || getActiveWeddingId()
+    const updated = tasks.map((t) => (t.id === id ? { ...t, status: nextStatus } : t))
+    setTasks(updated)
+    localStorage.setItem(`weddingos_${wid}_tasks`, JSON.stringify(updated))
+
     const numId = Number(id)
     if (!isNaN(numId)) {
-      await tasksApi.update(numId, {} as any).catch(() => {})
+      tasksApi.update(numId, { status: nextStatus }).catch((err) => {
+        console.warn('Could not sync task toggle to backend:', err)
+      })
     }
-    const updated = tasks.map((t) => {
-      if (t.id === id) {
-        const nextStatus: Task['status'] =
-          t.status === 'COMPLETED'
-            ? 'TODO'
-            : t.status === 'TODO'
-            ? 'IN_PROGRESS'
-            : 'COMPLETED'
-        return { ...t, status: nextStatus }
-      }
-      return t
-    })
-    setTasks(updated)
-    localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
   }
 
   const handleDelete = async (id: string) => {
     if (confirm('Remove this preparation task from your wedding checklist?')) {
-      const numId = Number(id)
-      if (!isNaN(numId)) {
-        await tasksApi.delete(numId).catch(() => {})
-      }
+      const wid = weddingId || getActiveWeddingId()
       const updated = tasks.filter((t) => t.id !== id)
       setTasks(updated)
-      localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
+      localStorage.setItem(`weddingos_${wid}_tasks`, JSON.stringify(updated))
+
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        tasksApi.delete(numId).catch((err) => {
+          console.warn('Could not sync task deletion to backend:', err)
+        })
+      }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    const wid = weddingId || getActiveWeddingId()
     let updated: Task[] = []
+
     if (editingTask) {
       const numId = Number(editingTask.id)
+      const updatedTask: Task = { ...editingTask, ...formData }
+      updated = tasks.map((t) => (t.id === editingTask.id ? updatedTask : t))
+      setTasks(updated)
+      localStorage.setItem(`weddingos_${wid}_tasks`, JSON.stringify(updated))
+      setIsModalOpen(false)
+
       if (!isNaN(numId)) {
-        await tasksApi
+        tasksApi
           .update(numId, {
-            title: formData.title,
-            priority: formData.priority as any,
-            status: formData.status as any,
+            title: formData.title.trim(),
+            priority: formData.priority,
+            status: formData.status,
             dueDate: formData.dueDate,
-            assignedTo: formData.assigneeName,
+            assignedTo: formData.assigneeName.trim(),
+            category: formData.relatedCeremony || 'General',
           })
-          .catch(() => {})
+          .catch((err) => console.warn('Failed to update task on backend:', err))
       }
-      updated = tasks.map((t) => (t.id === editingTask.id ? { ...t, ...formData } : t))
     } else {
       let createdId = `tsk-${Date.now()}`
       try {
         const saved = await tasksApi.create(
           {
-            title: formData.title,
-            priority: formData.priority as any,
-            status: formData.status as any,
+            title: formData.title.trim(),
+            priority: formData.priority,
+            status: formData.status,
             dueDate: formData.dueDate,
-            assignedTo: formData.assigneeName,
-            category: formData.relatedCeremony,
+            assignedTo: formData.assigneeName.trim(),
+            category: formData.relatedCeremony || 'General',
           },
-          weddingId
+          wid
         )
         if (saved?.id) createdId = String(saved.id)
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Backend task create offline/pending:', err)
       }
       const newTask: Task = {
         id: createdId,
         ...formData,
       }
       updated = [...tasks, newTask]
+      setTasks(updated)
+      localStorage.setItem(`weddingos_${wid}_tasks`, JSON.stringify(updated))
+      setIsModalOpen(false)
     }
-    setTasks(updated)
-    localStorage.setItem(`weddingos_${weddingId}_tasks`, JSON.stringify(updated))
-    setIsModalOpen(false)
   }
 
   const filteredTasks = tasks.filter((t) => {

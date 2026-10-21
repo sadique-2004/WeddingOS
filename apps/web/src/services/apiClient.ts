@@ -208,16 +208,25 @@ export interface BackendTask {
 }
 
 export const tasksApi = {
-  getAll: (weddingId = 1) => request<BackendTask[]>(`/tasks?weddingId=${weddingId}`),
-  create: (data: Partial<BackendTask>, weddingId = 1) =>
-    request<BackendTask>(`/tasks?weddingId=${weddingId}`, {
+  getAll: (weddingId?: number) => {
+    const wid = weddingId ?? getActiveWeddingId()
+    return request<BackendTask[]>(`/tasks?weddingId=${wid}`)
+  },
+  create: (data: Partial<BackendTask>, weddingId?: number) => {
+    const wid = weddingId ?? getActiveWeddingId()
+    return request<BackendTask>(`/tasks?weddingId=${wid}`, {
       method: 'POST',
       body: JSON.stringify(data),
-    }),
+    })
+  },
   update: (id: number, data: Partial<BackendTask>) =>
     request<BackendTask>(`/tasks/${id}`, {
       method: 'PUT',
       body: JSON.stringify(data),
+    }),
+  toggle: (id: number) =>
+    request<BackendTask>(`/tasks/${id}/toggle`, {
+      method: 'PATCH',
     }),
   delete: (id: number) =>
     request<void>(`/tasks/${id}`, {
