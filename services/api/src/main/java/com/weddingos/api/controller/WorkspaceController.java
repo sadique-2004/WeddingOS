@@ -24,8 +24,16 @@ public class WorkspaceController {
 
     @GetMapping("/active")
     @Operation(summary = "Get active wedding workspace summary, countdown and budget health")
-    public ResponseEntity<Map<String, Object>> getActiveWorkspace(@RequestParam(defaultValue = "1") Long weddingId) {
-        return ResponseEntity.ok(workspaceService.getActiveWorkspaceSummary(weddingId));
+    public ResponseEntity<Map<String, Object>> getActiveWorkspace(
+            @RequestParam(required = false) Long weddingId,
+            @RequestParam(required = false) String userEmail,
+            @RequestParam(required = false) String clerkUserId,
+            @RequestParam(required = false) String userName,
+            @RequestHeader(value = "X-User-Email", required = false) String headerEmail,
+            @RequestHeader(value = "X-Clerk-User-Id", required = false) String headerClerkId) {
+        String effectiveEmail = (userEmail != null && !userEmail.isBlank()) ? userEmail : headerEmail;
+        String effectiveClerkId = (clerkUserId != null && !clerkUserId.isBlank()) ? clerkUserId : headerClerkId;
+        return ResponseEntity.ok(workspaceService.getWorkspaceForUser(effectiveEmail, effectiveClerkId, userName, weddingId));
     }
 
     @GetMapping("/{id}")
@@ -51,16 +59,30 @@ public class WorkspaceController {
 
     @PutMapping("/budget")
     @Operation(summary = "Adjust total wedding budget target cap")
-    public ResponseEntity<Wedding> updateBudgetTarget(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<Wedding> updateBudgetTarget(
+            @RequestParam(required = false) Long weddingId,
+            @RequestBody Map<String, Object> payload) {
+        Long targetWid = weddingId;
+        if (targetWid == null && payload.containsKey("weddingId")) {
+            try {
+                targetWid = Long.valueOf(payload.get("weddingId").toString());
+            } catch (Exception ignored) {}
+        }
         BigDecimal amount = new BigDecimal(payload.get("totalBudgetTarget").toString());
-        return ResponseEntity.ok(workspaceService.updateBudgetTarget(1L, amount));
+        return ResponseEntity.ok(workspaceService.updateBudgetTarget(targetWid, amount));
     }
 
     @PutMapping("/details")
     @Operation(summary = "Update wedding general details and countdown date")
     public ResponseEntity<Wedding> updateDetails(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam(required = false) Long weddingId,
             @RequestBody Map<String, String> payload) {
+        Long targetWid = weddingId;
+        if (targetWid == null && payload.containsKey("weddingId")) {
+            try {
+                targetWid = Long.valueOf(payload.get("weddingId"));
+            } catch (Exception ignored) {}
+        }
         String bride = payload.get("brideName");
         String groom = payload.get("groomName");
         LocalDate date = (payload.containsKey("weddingDate") && payload.get("weddingDate") != null && !payload.get("weddingDate").isEmpty())
@@ -68,7 +90,7 @@ public class WorkspaceController {
         String city = payload.get("city");
         String venue = payload.get("venueName");
         String slug = payload.get("slug");
-        return ResponseEntity.ok(workspaceService.updateWeddingDetails(weddingId, bride, groom, date, city, venue, slug));
+        return ResponseEntity.ok(workspaceService.updateWeddingDetails(targetWid, bride, groom, date, city, venue, slug));
     }
 
     @PostMapping("/reset")

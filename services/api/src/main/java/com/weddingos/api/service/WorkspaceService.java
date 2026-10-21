@@ -9,7 +9,9 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 @Service
 @Transactional
@@ -118,7 +120,7 @@ public class WorkspaceService {
         BigDecimal totalPendingDues = expenseRepository.sumTotalPending(activeId);
         BigDecimal remainingBudget = totalBudget.subtract(totalSpent != null ? totalSpent : BigDecimal.ZERO);
 
-        long totalInvitations = invitationRepository.count();
+        long totalInvitations = invitationRepository.findByWeddingIdOrderByDisplayNameAsc(activeId).size();
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("id", wedding.getId());
@@ -144,16 +146,127 @@ public class WorkspaceService {
         return summary;
     }
 
+    @Transactional
+    public Map<String, Object> getWorkspaceForUser(String userEmail, String clerkUserId, String userName, Long requestedWeddingId) {
+        if ((userEmail == null || userEmail.isBlank()) && (clerkUserId == null || clerkUserId.isBlank())) {
+            return getActiveWorkspaceSummary(requestedWeddingId != null ? requestedWeddingId : 1L);
+        }
+
+        AppUser user = null;
+        if (clerkUserId != null && !clerkUserId.isBlank()) {
+            user = userRepository.findByClerkUserId(clerkUserId.trim()).orElse(null);
+        }
+        if (user == null && userEmail != null && !userEmail.isBlank()) {
+            user = userRepository.findByEmail(userEmail.trim().toLowerCase()).orElse(null);
+        }
+
+        if (user == null) {
+            String safeEmail = (userEmail != null && !userEmail.isBlank())
+                    ? userEmail.trim().toLowerCase()
+                    : ("user_" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@weddingos.app");
+            String safeClerkId = (clerkUserId != null && !clerkUserId.isBlank())
+                    ? clerkUserId.trim()
+                    : ("clerk_" + java.util.UUID.randomUUID().toString().substring(0, 12));
+            String safeName = (userName != null && !userName.isBlank())
+                    ? userName.trim()
+                    : safeEmail.split("@")[0];
+
+            user = new AppUser(safeClerkId, safeEmail, safeName);
+            user = userRepository.save(user);
+        } else {
+            boolean changed = false;
+            if (clerkUserId != null && !clerkUserId.isBlank() && !clerkUserId.equals(user.getClerkUserId())) {
+                user.setClerkUserId(clerkUserId.trim());
+                changed = true;
+            }
+            if (userName != null && !userName.isBlank() && !userName.equals(user.getFullName())) {
+                user.setFullName(userName.trim());
+                changed = true;
+            }
+            if (changed) {
+                user = userRepository.save(user);
+            }
+        }
+
+        Wedding wedding = null;
+
+        // If a specific wedding ID was requested, verify the user owns it or has membership
+        if (requestedWeddingId != null && requestedWeddingId > 0) {
+            var target = weddingRepository.findById(requestedWeddingId);
+            if (target.isPresent()) {
+                Wedding w = target.get();
+                if ((w.getOwnerUser() != null && w.getOwnerUser().getId().equals(user.getId()))
+                        || membershipRepository.findByWeddingIdAndUserId(w.getId(), user.getId()).isPresent()) {
+                    wedding = w;
+                }
+            }
+        }
+
+        // Check if user owns any wedding
+        if (wedding == null) {
+            List<Wedding> owned = weddingRepository.findByOwnerUser_Id(user.getId());
+            if (!owned.isEmpty()) {
+                wedding = owned.get(owned.size() - 1);
+            }
+        }
+
+        // Check if user is an invited member of a wedding
+        if (wedding == null) {
+            List<WeddingMembership> memberships = membershipRepository.findByUserId(user.getId());
+            if (!memberships.isEmpty()) {
+                wedding = memberships.get(memberships.size() - 1).getWedding();
+            }
+        }
+
+        // If user has no workspace yet, provision a brand new isolated wedding workspace for them
+        if (wedding == null) {
+            wedding = new Wedding();
+            wedding.setOwnerUser(user);
+            wedding.setBrideName("");
+            wedding.setGroomName("");
+            wedding.setWeddingDate(null);
+            wedding.setCity("");
+            wedding.setVenueName("");
+            wedding.setTotalBudgetTarget(BigDecimal.ZERO);
+            wedding.setExpectedGuestCapacity(0);
+            wedding = weddingRepository.save(wedding);
+
+            WeddingSlug slug = new WeddingSlug();
+            slug.setWedding(wedding);
+            slug.setSlug("wedding-" + wedding.getId());
+            slug.setIsActive(true);
+            slugRepository.save(slug);
+
+            WeddingMembership ownerMembership = new WeddingMembership();
+            ownerMembership.setWedding(wedding);
+            ownerMembership.setUser(user);
+            ownerMembership.setRole(WeddingMembership.Role.ADMIN);
+            ownerMembership.setTitle("Host & Primary Admin");
+            ownerMembership.setCanManageEvents(true);
+            ownerMembership.setCanManageTasks(true);
+            ownerMembership.setCanManageGuests(true);
+            ownerMembership.setCanCheckInGuests(true);
+            ownerMembership.setCanManageExpenses(true);
+            ownerMembership.setCanManageVendors(true);
+            ownerMembership.setCanManageWebsite(true);
+            ownerMembership.setCanModerateGallery(true);
+            membershipRepository.save(ownerMembership);
+        }
+
+        return getActiveWorkspaceSummary(wedding.getId());
+    }
+
     public Wedding updateBudgetTarget(Long weddingId, BigDecimal newBudgetTarget) {
-        Wedding wedding = weddingRepository.findById(weddingId)
+        Wedding wedding = weddingRepository.findById(weddingId != null ? weddingId : 1L)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseThrow());
-        wedding.setTotalBudgetTarget(newBudgetTarget);
+        wedding.setTotalBudgetTarget(newBudgetTarget != null ? newBudgetTarget : BigDecimal.ZERO);
         return weddingRepository.save(wedding);
     }
 
     public Wedding updateWeddingDetails(Long weddingId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, String slug) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
+        Wedding wedding = (weddingId != null) ? weddingRepository.findById(weddingId).orElse(null) : null;
+        if (wedding == null) {
+            wedding = weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
                     w.setOwnerUser(getOrCreateDefaultOwner());
                     w.setBrideName(brideName != null ? brideName : "");
@@ -164,7 +277,8 @@ public class WorkspaceService {
                     w.setTotalBudgetTarget(BigDecimal.ZERO);
                     w.setExpectedGuestCapacity(0);
                     return weddingRepository.save(w);
-                }));
+                });
+        }
 
         if (brideName != null) wedding.setBrideName(brideName.trim());
         if (groomName != null) wedding.setGroomName(groomName.trim());

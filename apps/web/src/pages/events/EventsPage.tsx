@@ -104,7 +104,11 @@ export default function EventsPage() {
       loadEvents(newWid)
     }
     window.addEventListener('weddingos_wedding_updated', handleUpdate)
-    return () => window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+    window.addEventListener('weddingos_active_wedding_changed', handleUpdate)
+    return () => {
+      window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+      window.removeEventListener('weddingos_active_wedding_changed', handleUpdate)
+    }
   }, [])
 
   // Form State

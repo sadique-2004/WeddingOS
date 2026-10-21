@@ -42,43 +42,75 @@ export default function OrganizerLayout() {
 
   // Load from localStorage if available, fetch from database & listen for updates
   useEffect(() => {
+    let isCancelled = false
+
     const loadWedding = async () => {
+      const email = user?.primaryEmailAddress?.emailAddress || localUser?.email || ''
+      const clerkId = user?.id || localUser?.id || ''
+      const fullName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+        localUser?.fullName ||
+        ''
+      const userScopeKey = email
+        ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
+        : 'weddingos_active_wedding'
+
       try {
-        const stored = localStorage.getItem('weddingos_active_wedding')
+        // Try user-scoped storage first, fallback to active
+        const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
         if (stored) {
           const parsed = JSON.parse(stored)
-          setWedding({
-            brideName: parsed.brideName || '',
-            groomName: parsed.groomName || '',
-            weddingDate: parsed.weddingDate || '',
-            locationName: parsed.locationName || parsed.venueName || parsed.city || '',
-          })
+          // If stored wedding has a userEmail and doesn't match current user, do not paint it
+          if (!parsed.userEmail || !email || parsed.userEmail.toLowerCase() === email.toLowerCase()) {
+            setWedding({
+              brideName: parsed.brideName || '',
+              groomName: parsed.groomName || '',
+              weddingDate: parsed.weddingDate || '',
+              locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+            })
+          }
         }
       } catch {
         // ignore
       }
 
       try {
-        const active = await workspacesApi.getActive(1)
-        if (active) {
+        const active = await workspacesApi.getActive(undefined, email, clerkId, fullName)
+        if (active && !isCancelled) {
           const updated = {
+            id: active.id,
             brideName: active.brideName || '',
             groomName: active.groomName || '',
             weddingDate: active.weddingDate || '',
             locationName: active.venueName || active.city || '',
+            slug: active.slug || '',
+            totalBudgetTarget: active.totalBudgetTarget || 0,
+            userEmail: email,
           }
           setWedding(updated)
           localStorage.setItem('weddingos_active_wedding', JSON.stringify(updated))
+          if (email) {
+            localStorage.setItem(userScopeKey, JSON.stringify(updated))
+          }
+          // Notify child pages (Events, Expenses, Tasks, Vendors) that active wedding ID is established
+          window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+          window.dispatchEvent(new Event('weddingos_wedding_updated'))
         }
-      } catch {
-        // ignore
+      } catch (err) {
+        console.warn('Could not sync user workspace:', err)
       }
     }
 
     loadWedding()
     window.addEventListener('weddingos_wedding_updated', loadWedding)
-    return () => window.removeEventListener('weddingos_wedding_updated', loadWedding)
-  }, [])
+    window.addEventListener('weddingos_auth_changed', loadWedding)
+    return () => {
+      isCancelled = true
+      window.removeEventListener('weddingos_wedding_updated', loadWedding)
+      window.removeEventListener('weddingos_auth_changed', loadWedding)
+    }
+  }, [user?.id, user?.primaryEmailAddress?.emailAddress, localUser?.email])
 
   // Calculate days remaining
   const calculateDaysRemaining = () => {

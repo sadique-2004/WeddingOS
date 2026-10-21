@@ -1,5 +1,7 @@
 import { useState, useEffect, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
+import { getLocalAuthSession } from '../../services/authService'
 import {
   User,
   Heart,
@@ -56,6 +58,8 @@ const DEFAULT_PROFILE: WeddingProfileData = {
 }
 
 export default function ProfilePage() {
+  const { user } = useUser()
+  const localUser = getLocalAuthSession()
   const [profile, setProfile] = useState<WeddingProfileData>(DEFAULT_PROFILE)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -71,10 +75,20 @@ export default function ProfilePage() {
 
     async function loadProfile() {
       setIsLoading(true)
+      const email = user?.primaryEmailAddress?.emailAddress || localUser?.email || ''
+      const clerkId = user?.id || localUser?.id || ''
+      const fullName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+        localUser?.fullName ||
+        ''
+      const userScopeKey = email
+        ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
+        : 'weddingos_active_wedding'
 
       // First check local cache for immediate paint
       try {
-        const stored = localStorage.getItem('weddingos_active_wedding')
+        const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
         if (stored) {
           const parsed = JSON.parse(stored)
           if (isMounted) {
@@ -96,7 +110,7 @@ export default function ProfilePage() {
 
       // Then fetch real state from Backend API
       try {
-        const backendData = await workspacesApi.getActive(1)
+        const backendData = await workspacesApi.getActive(undefined, email, clerkId, fullName)
         if (backendData && isMounted) {
           const normalized: WeddingProfileData = {
             id: backendData.id || 1,
@@ -112,6 +126,9 @@ export default function ProfilePage() {
           }
           setProfile((prev) => ({ ...prev, ...normalized }))
           localStorage.setItem('weddingos_active_wedding', JSON.stringify(normalized))
+          if (email) {
+            localStorage.setItem(userScopeKey, JSON.stringify(normalized))
+          }
         }
       } catch (err) {
         console.warn('Backend profile sync pending/offline:', err)
@@ -124,7 +141,7 @@ export default function ProfilePage() {
     return () => {
       isMounted = false
     }
-  }, [])
+  }, [user?.id, user?.primaryEmailAddress?.emailAddress, localUser?.email])
 
   // Calculate live countdown days
   const calculateDaysRemaining = () => {
@@ -142,7 +159,7 @@ export default function ProfilePage() {
 
   const daysRemaining = calculateDaysRemaining()
 
-  // 2. Save Profile handler
+  // 2. Save Profile handler (Optimistic UI + Fast background sync)
   const handleSaveProfile = async (e: FormEvent) => {
     e.preventDefault()
     setIsSaving(true)
@@ -155,43 +172,51 @@ export default function ProfilePage() {
     }
 
     try {
-      // 1. Sync directly to Backend MySQL Database
       const locationSummary = [profile.venueName.trim(), profile.city.trim()]
         .filter(Boolean)
         .join(', ')
 
-      try {
-        await workspacesApi.updateDetails(
-          {
-            brideName: profile.brideName.trim(),
-            groomName: profile.groomName.trim(),
-            weddingDate: profile.weddingDate || undefined,
-            city: profile.city.trim(),
-            venueName: profile.venueName.trim(),
-            slug: profile.slug.trim(),
-          },
-          Number(profile.id) || 1
-        )
-      } catch (backendErr) {
-        console.warn('Could not sync profile to backend:', backendErr)
-      }
+      const email = user?.primaryEmailAddress?.emailAddress || localUser?.email || ''
+      const userScopeKey = email
+        ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
+        : 'weddingos_active_wedding'
 
-      // 2. Sync to local storage & propagate cross-component event
+      // 1. Optimistic Update: Save to local storage & broadcast immediately (0ms UI latency)
       const updatedProfile = {
         ...profile,
         locationName: locationSummary,
+        userEmail: email,
         updatedAt: new Date().toISOString(),
       }
 
       localStorage.setItem('weddingos_active_wedding', JSON.stringify(updatedProfile))
+      if (email) {
+        localStorage.setItem(userScopeKey, JSON.stringify(updatedProfile))
+      }
       window.dispatchEvent(new Event('weddingos_wedding_updated'))
+      window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
       window.dispatchEvent(new StorageEvent('storage', { key: 'weddingos_active_wedding' }))
 
       setSuccessNotice('Wedding profile details saved and updated across all devices!')
       setTimeout(() => setSuccessNotice(null), 4000)
+      setIsSaving(false)
+
+      // 2. Non-blocking background sync directly to Backend MySQL Database
+      workspacesApi.updateDetails(
+        {
+          brideName: profile.brideName.trim(),
+          groomName: profile.groomName.trim(),
+          weddingDate: profile.weddingDate || undefined,
+          city: profile.city.trim(),
+          venueName: profile.venueName.trim(),
+          slug: profile.slug.trim(),
+        },
+        Number(profile.id) || undefined
+      ).catch((backendErr) => {
+        console.warn('Could not sync profile to backend:', backendErr)
+      })
     } catch (err: any) {
       setErrorNotice(err?.message || 'Failed to save profile. Please try again.')
-    } finally {
       setIsSaving(false)
     }
   }

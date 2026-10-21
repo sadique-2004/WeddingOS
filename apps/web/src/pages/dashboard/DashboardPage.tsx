@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
+import { getLocalAuthSession } from '../../services/authService'
 import { Button } from '../../components/ui/Button'
 import { Card, CardContent } from '../../components/ui/Card'
 import { Badge } from '../../components/ui/Badge'
@@ -22,7 +24,7 @@ import {
   User,
   Info
 } from 'lucide-react'
-import { workspacesApi, eventsApi, tasksApi, expensesApi, galleryApi } from '../../services/apiClient'
+import { workspacesApi, eventsApi, tasksApi, expensesApi, galleryApi, getActiveWeddingId } from '../../services/apiClient'
 import { getInvitations, resetToDemoData } from '../../services/invitationStore'
 import { resetMembershipDemoData } from '../../services/membershipStore'
 
@@ -103,10 +105,24 @@ export default function DashboardPage() {
     seconds: number
   }>({ days: 0, hours: 0, minutes: 0, seconds: 0 })
 
+  const { user } = useUser()
+  const localUser = getLocalAuthSession()
+
   const loadAllDashboardData = async () => {
     try {
-      // 1. Load active workspace summary
-      const active = await workspacesApi.getActive(1).catch(() => null)
+      const email = user?.primaryEmailAddress?.emailAddress || localUser?.email || ''
+      const clerkId = user?.id || localUser?.id || ''
+      const fullName =
+        user?.fullName ||
+        [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+        localUser?.fullName ||
+        ''
+      const userScopeKey = email
+        ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
+        : 'weddingos_active_wedding'
+
+      // 1. Load active workspace summary dynamically for logged-in user
+      const active = await workspacesApi.getActive(undefined, email, clerkId, fullName).catch(() => null)
       if (active) {
         setWedding({
           id: active.id || 1,
@@ -123,14 +139,14 @@ export default function DashboardPage() {
           setTotalExpenses(Number(active.totalRecordedSpending) || 0)
         }
       } else {
-        const stored = localStorage.getItem('weddingos_active_wedding')
+        const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
         if (stored) {
           const parsed = JSON.parse(stored)
           setWedding(parsed)
         }
       }
 
-      const activeWeddingId = active?.id || 1
+      const activeWeddingId = active?.id || getActiveWeddingId()
 
       // 2. Load Tasks (from API or local cache)
       const tasksRes = await tasksApi.getAll(activeWeddingId).catch(() => null)
@@ -269,15 +285,17 @@ export default function DashboardPage() {
       loadAllDashboardData()
     }
     window.addEventListener('weddingos_wedding_updated', handleUpdate)
+    window.addEventListener('weddingos_active_wedding_changed', handleUpdate)
     window.addEventListener('weddingos_invitations_updated', handleUpdate)
     window.addEventListener('weddingos_members_updated', handleUpdate)
 
     return () => {
       window.removeEventListener('weddingos_wedding_updated', handleUpdate)
+      window.removeEventListener('weddingos_active_wedding_changed', handleUpdate)
       window.removeEventListener('weddingos_invitations_updated', handleUpdate)
       window.removeEventListener('weddingos_members_updated', handleUpdate)
     }
-  }, [])
+  }, [user?.id, user?.primaryEmailAddress?.emailAddress, localUser?.email])
 
   // Live countdown timer calculation
   useEffect(() => {

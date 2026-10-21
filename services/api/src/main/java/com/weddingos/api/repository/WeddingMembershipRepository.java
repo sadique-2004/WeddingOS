@@ -11,5 +11,6 @@ import java.util.Optional;
 public interface WeddingMembershipRepository extends JpaRepository<WeddingMembership, Long> {
     List<WeddingMembership> findByWeddingId(Long weddingId);
     Optional<WeddingMembership> findByWeddingIdAndUserId(Long weddingId, Long userId);
+    List<WeddingMembership> findByUserId(Long userId);
     long countByWeddingIdAndRole(Long weddingId, WeddingMembership.Role role);
 }

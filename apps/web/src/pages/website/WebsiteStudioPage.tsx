@@ -23,7 +23,7 @@ import {
 } from 'lucide-react'
 import PublicWeddingPage from '../public/PublicWeddingPage'
 import type { PublicWebsiteConfig } from '../../types/website'
-import { workspacesApi, websiteApi } from '../../services/apiClient'
+import { workspacesApi, websiteApi, getActiveWeddingId } from '../../services/apiClient'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
   slug: 'my-wedding',
@@ -70,9 +70,10 @@ export default function WebsiteStudioPage() {
 
   // Fetch real database details on mount
   useEffect(() => {
+    const wid = getActiveWeddingId()
     Promise.allSettled([
-      workspacesApi.getActive(1),
-      websiteApi.getConfig(1)
+      workspacesApi.getActive(wid),
+      websiteApi.getConfig(wid)
     ]).then(([workspaceResult, siteResult]) => {
       let updated: Partial<PublicWebsiteConfig> = {}
       if (workspaceResult.status === 'fulfilled' && workspaceResult.value) {
@@ -130,40 +131,39 @@ export default function WebsiteStudioPage() {
   }
 
   const handleSave = async () => {
+    const wid = getActiveWeddingId()
+
+    // 1. Optimistic immediate save to localStorage & toast (0ms delay)
     try {
-      // 1. Sync to backend MySQL database
-      try {
-        await workspacesApi.updateDetails({
-          brideName: config.brideName.trim(),
-          groomName: config.groomName.trim(),
-          weddingDate: config.weddingDate,
-          venueName: config.locationName.trim(),
-          city: config.locationName.trim(),
-          slug: config.slug.trim(),
-        }, 1)
-
-        await websiteApi.updateConfig({
-          themeKey: config.themeKey as any,
-          welcomeHeadline: config.welcomeHeadline,
-          welcomeMessage: config.welcomeMessage,
-          isPublished: config.isPublished,
-          showSchedule: config.showSchedule,
-          showDressCode: config.showDressCode,
-          showVenues: config.showVenues,
-          showLivestream: config.showLivestream,
-          livestreamUrl: config.livestreamUrl,
-        }, 1)
-      } catch (backendErr) {
-        console.warn('Backend sync error:', backendErr)
-      }
-
-      // 2. Save locally and notify tabs
       localStorage.setItem('weddingos_website_config', JSON.stringify(config))
       window.dispatchEvent(new Event('weddingos_website_updated'))
       showToast('Theme studio settings successfully saved & published to cloud!')
     } catch {
-      showToast('Error saving settings')
+      showToast('Error saving settings locally')
     }
+
+    // 2. Parallel background sync to backend
+    Promise.allSettled([
+      workspacesApi.updateDetails({
+        brideName: config.brideName.trim(),
+        groomName: config.groomName.trim(),
+        weddingDate: config.weddingDate,
+        venueName: config.locationName.trim(),
+        city: config.locationName.trim(),
+        slug: config.slug.trim(),
+      }, wid),
+      websiteApi.updateConfig({
+        themeKey: config.themeKey as any,
+        welcomeHeadline: config.welcomeHeadline,
+        welcomeMessage: config.welcomeMessage,
+        isPublished: config.isPublished,
+        showSchedule: config.showSchedule,
+        showDressCode: config.showDressCode,
+        showVenues: config.showVenues,
+        showLivestream: config.showLivestream,
+        livestreamUrl: config.livestreamUrl,
+      }, wid)
+    ]).catch(err => console.warn('Background studio sync error:', err))
   }
 
   return (

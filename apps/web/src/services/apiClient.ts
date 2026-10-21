@@ -4,36 +4,72 @@ const API_BASE_URL =
     ? 'https://weddingos-api.onrender.com/api/v1'
     : 'http://localhost:8080/api/v1')
 
+export function getActiveWeddingId(): number {
+  try {
+    const raw = localStorage.getItem('weddingos_active_wedding')
+    if (raw) {
+      const parsed = JSON.parse(raw)
+      const id = Number(parsed.id)
+      if (id && !isNaN(id)) return id
+    }
+  } catch {}
+  return 1
+}
+
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(options.headers || {}),
-  }
 
-  const response = await fetch(url, {
-    ...options,
-    headers,
-  })
-
-  if (!response.ok) {
-    const errorText = await response.text().catch(() => '')
-    let errorMsg = `API Error ${response.status}: ${response.statusText}`
-    try {
-      const errorJson = JSON.parse(errorText)
-      if (errorJson.message) errorMsg = errorJson.message
-    } catch {
-      if (errorText) errorMsg = errorText
+  // Grab active auth user email & clerk id if present in local session
+  let authEmail = ''
+  let authClerkId = ''
+  try {
+    const sessionRaw = localStorage.getItem('weddingos_session_user')
+    if (sessionRaw) {
+      const sess = JSON.parse(sessionRaw)
+      if (sess.email) authEmail = sess.email
+      if (sess.id) authClerkId = sess.id
     }
-    throw new Error(errorMsg)
+  } catch {}
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...(authEmail ? { 'X-User-Email': authEmail } : {}),
+    ...(authClerkId ? { 'X-Clerk-User-Id': authClerkId } : {}),
+    ...((options.headers as Record<string, string>) || {}),
   }
 
-  // Handle 204 No Content
-  if (response.status === 204) {
-    return {} as T
-  }
+  // 10s request timeout to guarantee UI never freezes or hangs indefinitely
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 10000)
 
-  return response.json()
+  try {
+    const response = await fetch(url, {
+      ...options,
+      signal: options.signal || controller.signal,
+      headers,
+    })
+
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '')
+      let errorMsg = `API Error ${response.status}: ${response.statusText}`
+      try {
+        const errorJson = JSON.parse(errorText)
+        if (errorJson.message) errorMsg = errorJson.message
+      } catch {
+        if (errorText) errorMsg = errorText
+      }
+      throw new Error(errorMsg)
+    }
+
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return {} as T
+    }
+
+    return response.json()
+  } finally {
+    clearTimeout(timeoutId)
+  }
 }
 
 // ---------------- Workspaces & Dashboard ----------------
@@ -56,7 +92,15 @@ export interface WorkspaceSummary {
 }
 
 export const workspaceApi = {
-  getActive: (weddingId = 1) => request<WorkspaceSummary>(`/workspaces/active?weddingId=${weddingId}`),
+  getActive: (weddingId?: number, userEmail?: string, clerkUserId?: string, userName?: string) => {
+    const params: string[] = []
+    if (weddingId) params.push(`weddingId=${weddingId}`)
+    if (userEmail) params.push(`userEmail=${encodeURIComponent(userEmail)}`)
+    if (clerkUserId) params.push(`clerkUserId=${encodeURIComponent(clerkUserId)}`)
+    if (userName) params.push(`userName=${encodeURIComponent(userName)}`)
+    const qs = params.length > 0 ? `?${params.join('&')}` : ''
+    return request<WorkspaceSummary>(`/workspaces/active${qs}`)
+  },
   getById: (weddingId: number) => request<WorkspaceSummary>(`/workspaces/${weddingId}`),
   create: (data: {
     ownerUserId?: number
@@ -72,11 +116,13 @@ export const workspaceApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateBudget: (totalBudgetTarget: number) =>
-    request<any>('/workspaces/budget', {
+  updateBudget: (totalBudgetTarget: number, weddingId?: number) => {
+    const wid = weddingId ?? getActiveWeddingId()
+    return request<any>(`/workspaces/budget?weddingId=${wid}`, {
       method: 'PUT',
-      body: JSON.stringify({ totalBudgetTarget }),
-    }),
+      body: JSON.stringify({ totalBudgetTarget, weddingId: wid }),
+    })
+  },
   updateDetails: (
     details: {
       brideName: string
@@ -86,19 +132,22 @@ export const workspaceApi = {
       venueName?: string
       slug?: string
     },
-    weddingId = 1
-  ) =>
-    request<any>(`/workspaces/details?weddingId=${weddingId}`, {
+    weddingId?: number
+  ) => {
+    const wid = weddingId ?? getActiveWeddingId()
+    return request<any>(`/workspaces/details?weddingId=${wid}`, {
       method: 'PUT',
-      body: JSON.stringify(details),
-    }),
-  reset: async (weddingId = 1) => {
+      body: JSON.stringify({ ...details, weddingId: wid }),
+    })
+  },
+  reset: async (weddingId?: number) => {
+    const wid = weddingId ?? getActiveWeddingId()
     try {
-      return await request<WorkspaceSummary>(`/workspaces/${weddingId}/reset`, {
+      return await request<WorkspaceSummary>(`/workspaces/${wid}/reset`, {
         method: 'POST',
       })
     } catch {
-      return await request<WorkspaceSummary>(`/workspaces/reset?weddingId=${weddingId}`, {
+      return await request<WorkspaceSummary>(`/workspaces/reset?weddingId=${wid}`, {
         method: 'POST',
       })
     }
