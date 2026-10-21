@@ -13,7 +13,7 @@ import {
 import QRCode from 'qrcode'
 import { resolveInvitation, getInvitations, saveInvitations } from '../../services/invitationStore'
 import type { FamilyInvitation } from '../../types/invitation'
-import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
+import { publicApi } from '../../services/apiClient'
 
 export default function GuestInvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -37,7 +37,70 @@ export default function GuestInvitePage() {
   const [dietaryInput, setDietaryInput] = useState<string>('')
 
   useEffect(() => {
-    const loadWedding = async () => {
+    if (!token) return
+
+    // 1. First attempt to load via public API from backend
+    publicApi.getInvitation(token).then((data) => {
+      if (data) {
+        setInvitation({
+          id: data.invitationToken,
+          displayName: data.displayName,
+          primaryContactName: data.primaryContactName,
+          phoneNumber: '',
+          circle: (data.circle as any) || 'Friends & Colleagues',
+          maxAttendees: data.maxAttendees || 2,
+          actualAttendees: data.actualAttendees || 0,
+          rsvpStatus: (data.rsvpStatus as any) || 'PENDING',
+          ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
+          dietaryNotes: data.dietaryNotes || '',
+          checkedInAt: data.checkedIn ? new Date().toISOString() : null,
+          invitationToken: data.invitationToken,
+        })
+        setRsvpStatus((data.rsvpStatus as any) || 'PENDING')
+        setAttendeeCount(data.actualAttendees > 0 ? data.actualAttendees : (data.maxAttendees || 2))
+        setDietaryInput(data.dietaryNotes || '')
+        setWedding({
+          brideName: data.brideName || '',
+          groomName: data.groomName || '',
+          weddingDate: data.weddingDate || '',
+          locationName: data.venueName || data.city || '',
+        })
+
+        // Generate dynamic QR Code encoding the exact invitation token/URL
+        const inviteUrl = `${window.location.origin}/invite/${data.invitationToken}`
+        QRCode.toDataURL(inviteUrl, {
+          width: 320,
+          margin: 2,
+          color: {
+            dark: '#4b030e',
+            light: '#ffffff',
+          },
+        })
+          .then((url: string) => setQrDataUrl(url))
+          .catch((err: unknown) => console.error('Failed generating QR code:', err))
+      }
+    }).catch(() => {
+      // 2. Fallback to local offline invitation store
+      const found = resolveInvitation(token)
+      if (found) {
+        setInvitation(found)
+        setRsvpStatus(found.rsvpStatus)
+        setAttendeeCount(found.actualAttendees > 0 ? found.actualAttendees : found.maxAttendees)
+        setDietaryInput(found.dietaryNotes || '')
+
+        const inviteUrl = `${window.location.origin}/invite/${found.invitationToken}`
+        QRCode.toDataURL(inviteUrl, {
+          width: 320,
+          margin: 2,
+          color: {
+            dark: '#4b030e',
+            light: '#ffffff',
+          },
+        })
+          .then((url: string) => setQrDataUrl(url))
+          .catch((err: unknown) => console.error('Failed generating QR code:', err))
+      }
+
       try {
         const stored = localStorage.getItem('weddingos_active_wedding')
         if (stored) {
@@ -52,58 +115,27 @@ export default function GuestInvitePage() {
       } catch {
         // ignore
       }
-
-      try {
-        const active = await workspacesApi.getActive(getActiveWeddingId() || undefined)
-        if (active) {
-          setWedding({
-            brideName: active.brideName || '',
-            groomName: active.groomName || '',
-            weddingDate: active.weddingDate || '',
-            locationName: active.venueName || active.city || '',
-          })
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    loadWedding()
-
-    if (!token) return
-
-    const found = resolveInvitation(token)
-    if (found) {
-      setInvitation(found)
-      setRsvpStatus(found.rsvpStatus)
-      setAttendeeCount(found.actualAttendees > 0 ? found.actualAttendees : found.maxAttendees)
-      setDietaryInput(found.dietaryNotes || '')
-
-      // Generate dynamic QR Code encoding the exact invitation token/URL
-      const inviteUrl = `${window.location.origin}/invite/${found.invitationToken}`
-      QRCode.toDataURL(inviteUrl, {
-        width: 320,
-        margin: 2,
-        color: {
-          dark: '#4b030e',
-          light: '#ffffff',
-        },
-      })
-        .then((url: string) => setQrDataUrl(url))
-        .catch((err: unknown) => console.error('Failed generating QR code:', err))
-    }
+    })
   }, [token])
 
   const handleRsvpSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!invitation) return
+    if (!invitation || !token) return
 
     setIsSubmittingRsvp(true)
 
-    setTimeout(() => {
+    // Call public backend endpoint
+    publicApi.submitRsvp(token, {
+      rsvpStatus: rsvpStatus === 'PENDING' ? 'ATTENDING' : rsvpStatus,
+      actualAttendees: rsvpStatus === 'ATTENDING' ? attendeeCount : 0,
+      dietaryNotes: dietaryInput,
+    }).catch((err) => {
+      console.warn('Backend RSVP submit note:', err)
+    }).finally(() => {
+      // Also update local storage for offline continuity
       const allInvites = getInvitations()
       const updated = allInvites.map((inv) => {
-        if (inv.id === invitation.id) {
+        if (inv.id === invitation.id || inv.invitationToken === invitation.invitationToken) {
           return {
             ...inv,
             rsvpStatus,
@@ -116,15 +148,17 @@ export default function GuestInvitePage() {
 
       saveInvitations(updated)
 
-      const refreshed = updated.find((i) => i.id === invitation.id)
-      if (refreshed) {
-        setInvitation(refreshed)
-      }
+      setInvitation((prev) => prev ? {
+        ...prev,
+        rsvpStatus,
+        actualAttendees: rsvpStatus === 'ATTENDING' ? attendeeCount : 0,
+        dietaryNotes: dietaryInput,
+      } : null)
 
       setIsSubmittingRsvp(false)
       setRsvpSavedNotice(true)
       setTimeout(() => setRsvpSavedNotice(false), 4000)
-    }, 400)
+    })
   }
 
   const handleCopyPassLink = () => {
