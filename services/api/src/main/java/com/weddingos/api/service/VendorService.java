@@ -4,26 +4,30 @@ import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.VendorContact;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.VendorContactRepository;
-import com.weddingos.api.repository.WeddingRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+
+import static com.weddingos.api.security.WeddingAccessService.weddingIdOf;
 
 @Service
 @Transactional
 public class VendorService {
 
     private final VendorContactRepository vendorRepository;
-    private final WeddingRepository weddingRepository;
+    private final WeddingAccessService access;
 
-    public VendorService(VendorContactRepository vendorRepository, WeddingRepository weddingRepository) {
+    public VendorService(VendorContactRepository vendorRepository, WeddingAccessService access) {
         this.vendorRepository = vendorRepository;
-        this.weddingRepository = weddingRepository;
+        this.access = access;
     }
 
     @Transactional(readOnly = true)
     public List<VendorContact> getVendors(Long weddingId, String category) {
+        access.require(weddingId, WeddingModule.VENDORS);
         if (category != null && !category.equalsIgnoreCase("ALL")) {
             return vendorRepository.findByWeddingIdAndCategory(weddingId, category);
         }
@@ -31,15 +35,14 @@ public class VendorService {
     }
 
     public VendorContact createVendor(Long weddingId, VendorContact vendor) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
+        Wedding wedding = access.require(weddingId, WeddingModule.VENDORS).wedding();
+        vendor.setId(null); // never let a client-supplied ID overwrite an existing row
         vendor.setWedding(wedding);
         return vendorRepository.save(vendor);
     }
 
     public VendorContact updateVendor(Long id, VendorContact updates) {
-        VendorContact existing = vendorRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Vendor not found: " + id));
+        VendorContact existing = loadAuthorized(id);
 
         if (updates.getBusinessName() != null) existing.setBusinessName(updates.getBusinessName());
         if (updates.getContactPerson() != null) existing.setContactPerson(updates.getContactPerson());
@@ -55,6 +58,14 @@ public class VendorService {
     }
 
     public void deleteVendor(Long id) {
-        vendorRepository.deleteById(id);
+        vendorRepository.delete(loadAuthorized(id));
+    }
+
+    /** Loads a vendor and checks VENDORS permission on the wedding that owns it. */
+    private VendorContact loadAuthorized(Long id) {
+        VendorContact vendor = vendorRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Vendor not found: " + id));
+        access.require(weddingIdOf(vendor.getWedding()), WeddingModule.VENDORS);
+        return vendor;
     }
 }

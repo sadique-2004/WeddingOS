@@ -26,17 +26,10 @@ public class WorkspaceController {
     }
 
     @GetMapping("/active")
-    @Operation(summary = "Get active wedding workspace summary, countdown and budget health")
-    public ResponseEntity<Map<String, Object>> getActiveWorkspace(
-            @RequestParam(required = false) Long weddingId,
-            @RequestParam(required = false) String userEmail,
-            @RequestParam(required = false) String clerkUserId,
-            @RequestParam(required = false) String userName,
-            @RequestHeader(value = "X-User-Email", required = false) String headerEmail,
-            @RequestHeader(value = "X-Clerk-User-Id", required = false) String headerClerkId) {
-        String effectiveEmail = (userEmail != null && !userEmail.isBlank()) ? userEmail : headerEmail;
-        String effectiveClerkId = (clerkUserId != null && !clerkUserId.isBlank()) ? clerkUserId : headerClerkId;
-        return ResponseEntity.ok(workspaceService.getWorkspaceForUser(effectiveEmail, effectiveClerkId, userName, weddingId));
+    @Operation(summary = "Get the signed-in user's active wedding workspace (identity comes only from the bearer token)")
+    public ResponseEntity<Map<String, Object>> getActiveWorkspace(@RequestParam(required = false) Long weddingId) {
+        // Legacy userEmail / clerkUserId / X-User-* inputs are intentionally ignored.
+        return ResponseEntity.ok(workspaceService.getWorkspaceForUser(weddingId));
     }
 
     @GetMapping("/{id}")
@@ -47,20 +40,18 @@ public class WorkspaceController {
 
     @PostMapping
     @Operation(summary = "Create a new wedding workspace for a couple/organizer")
-    public ResponseEntity<Wedding> createWorkspace(
-            @RequestBody Map<String, Object> payload,
-            @RequestHeader(value = "X-User-Email", required = false) String headerEmail,
-            @RequestHeader(value = "X-Clerk-User-Id", required = false) String headerClerkId) {
+    public ResponseEntity<Wedding> createWorkspace(@RequestBody Map<String, Object> payload) {
+        // The owner is always the authenticated user; any client-supplied ownerUserId is ignored.
         String bride = (String) payload.get("brideName");
         String groom = (String) payload.get("groomName");
-        LocalDate date = payload.containsKey("weddingDate") ? LocalDate.parse(payload.get("weddingDate").toString()) : null;
+        Object rawDate = payload.get("weddingDate");
+        LocalDate date = rawDate != null && !rawDate.toString().isBlank() ? LocalDate.parse(rawDate.toString()) : null;
         String city = (String) payload.get("city");
         String venue = (String) payload.get("venueName");
-        BigDecimal budget = payload.containsKey("totalBudgetTarget") ? new BigDecimal(payload.get("totalBudgetTarget").toString())
-                : (payload.containsKey("totalBudget") ? new BigDecimal(payload.get("totalBudget").toString()) : null);
-        Long ownerUserId = payload.containsKey("ownerUserId") ? Long.valueOf(payload.get("ownerUserId").toString()) : null;
+        Object rawBudget = payload.get("totalBudgetTarget") != null ? payload.get("totalBudgetTarget") : payload.get("totalBudget");
+        BigDecimal budget = rawBudget != null ? new BigDecimal(rawBudget.toString()) : null;
         String slug = (String) payload.get("slug");
-        return ResponseEntity.ok(workspaceService.createWorkspace(ownerUserId, headerEmail, headerClerkId, bride, groom, date, city, venue, budget, slug));
+        return ResponseEntity.ok(workspaceService.createWorkspace(bride, groom, date, city, venue, budget, slug));
     }
 
     @PutMapping("/budget")

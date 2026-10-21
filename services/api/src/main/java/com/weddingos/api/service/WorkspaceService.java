@@ -1,19 +1,21 @@
 package com.weddingos.api.service;
 
-import com.weddingos.api.exception.BadRequestException;
-import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.*;
 import com.weddingos.api.repository.*;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingAccessService.WeddingAccess;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.http.HttpStatus;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 
 @Service
 @Transactional
@@ -32,6 +34,7 @@ public class WorkspaceService {
     private final WeddingWebsiteRepository websiteRepository;
     private final CheckInLogRepository checkInLogRepository;
     private final JdbcTemplate jdbcTemplate;
+    private final WeddingAccessService access;
 
     public WorkspaceService(WeddingRepository weddingRepository,
                             WeddingSlugRepository slugRepository,
@@ -45,7 +48,8 @@ public class WorkspaceService {
                             GalleryPhotoRepository galleryPhotoRepository,
                             WeddingWebsiteRepository websiteRepository,
                             CheckInLogRepository checkInLogRepository,
-                            JdbcTemplate jdbcTemplate) {
+                            JdbcTemplate jdbcTemplate,
+                            WeddingAccessService access) {
         this.weddingRepository = weddingRepository;
         this.slugRepository = slugRepository;
         this.userRepository = userRepository;
@@ -59,6 +63,7 @@ public class WorkspaceService {
         this.websiteRepository = websiteRepository;
         this.checkInLogRepository = checkInLogRepository;
         this.jdbcTemplate = jdbcTemplate;
+        this.access = access;
     }
 
     @jakarta.annotation.PostConstruct
@@ -85,33 +90,18 @@ public class WorkspaceService {
         }
     }
 
-    /**
-     * Loads a wedding by ID. Missing or unknown IDs are rejected; this never substitutes
-     * another wedding (no "first wedding" / ID 1 fallback).
-     */
-    private Wedding requireWedding(Long weddingId) {
-        if (weddingId == null) {
-            throw new BadRequestException("weddingId is required.");
-        }
-        return weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
-    }
-
+    /** Workspace summary for a wedding the current user belongs to (403 otherwise). */
     @Transactional
     public Map<String, Object> getActiveWorkspaceSummary(Long weddingId) {
-        Wedding wedding = requireWedding(weddingId);
+        return summaryFor(access.requireMember(weddingId));
+    }
 
+    private Map<String, Object> summaryFor(WeddingAccess granted) {
+        Wedding wedding = granted.wedding();
         Long activeId = wedding.getId();
         String slug = slugRepository.findByWeddingId(activeId)
                 .map(WeddingSlug::getSlug)
                 .orElse("wedding-" + activeId);
-
-        BigDecimal totalBudget = wedding.getTotalBudgetTarget() != null ? wedding.getTotalBudgetTarget() : BigDecimal.ZERO;
-        BigDecimal totalSpent = expenseRepository.sumTotalRecorded(activeId);
-        BigDecimal totalPaid = expenseRepository.sumTotalPaid(activeId);
-        BigDecimal totalAdvancePaid = expenseRepository.sumTotalAdvancePaid(activeId);
-        BigDecimal totalPendingDues = expenseRepository.sumTotalPending(activeId);
-        BigDecimal remainingBudget = totalBudget.subtract(totalSpent != null ? totalSpent : BigDecimal.ZERO);
 
         long totalInvitations = invitationRepository.findByWeddingIdOrderByDisplayNameAsc(activeId).size();
 
@@ -127,60 +117,37 @@ public class WorkspaceService {
         summary.put("city", wedding.getCity() != null ? wedding.getCity() : "");
         summary.put("venueName", wedding.getVenueName() != null ? wedding.getVenueName() : "");
         summary.put("slug", slug);
-        summary.put("totalBudgetTarget", totalBudget);
-        summary.put("totalRecordedSpending", totalSpent != null ? totalSpent : BigDecimal.ZERO);
-        summary.put("totalPaid", (totalPaid != null ? totalPaid : BigDecimal.ZERO).add(totalAdvancePaid != null ? totalAdvancePaid : BigDecimal.ZERO));
-        summary.put("totalPendingDues", totalPendingDues != null ? totalPendingDues : BigDecimal.ZERO);
-        summary.put("remainingRunway", remainingBudget);
         summary.put("expectedGuestCapacity", wedding.getExpectedGuestCapacity() != null ? wedding.getExpectedGuestCapacity() : 0);
         summary.put("totalInvitationsCount", totalInvitations);
         summary.put("currencyCode", wedding.getCurrencyCode() != null ? wedding.getCurrencyCode() : "INR");
+        summary.put("role", granted.admin() ? WeddingMembership.Role.ADMIN.name() : WeddingMembership.Role.ORGANIZER.name());
+
+        // Budget figures belong to the EXPENSES module: only shown to admins and organizers with that permission.
+        if (granted.can(WeddingModule.EXPENSES)) {
+            BigDecimal totalBudget = wedding.getTotalBudgetTarget() != null ? wedding.getTotalBudgetTarget() : BigDecimal.ZERO;
+            BigDecimal totalSpent = expenseRepository.sumTotalRecorded(activeId);
+            BigDecimal totalPaid = expenseRepository.sumTotalPaid(activeId);
+            BigDecimal totalAdvancePaid = expenseRepository.sumTotalAdvancePaid(activeId);
+            BigDecimal totalPendingDues = expenseRepository.sumTotalPending(activeId);
+            BigDecimal remainingBudget = totalBudget.subtract(totalSpent != null ? totalSpent : BigDecimal.ZERO);
+            summary.put("totalBudgetTarget", totalBudget);
+            summary.put("totalRecordedSpending", totalSpent != null ? totalSpent : BigDecimal.ZERO);
+            summary.put("totalPaid", (totalPaid != null ? totalPaid : BigDecimal.ZERO).add(totalAdvancePaid != null ? totalAdvancePaid : BigDecimal.ZERO));
+            summary.put("totalPendingDues", totalPendingDues != null ? totalPendingDues : BigDecimal.ZERO);
+            summary.put("remainingRunway", remainingBudget);
+        }
 
         return summary;
     }
 
+    /**
+     * Resolves the signed-in user's workspace. The user comes only from the verified token;
+     * {@code requestedWeddingId} is honoured only if the user owns it or is a member.
+     * A user with no workspace gets a new, empty one that they own.
+     */
     @Transactional
-    public Map<String, Object> getWorkspaceForUser(String userEmail, String clerkUserId, String userName, Long requestedWeddingId) {
-        if ((userEmail == null || userEmail.isBlank()) && (clerkUserId == null || clerkUserId.isBlank())) {
-            throw new BadRequestException("A signed-in user identity is required to resolve the active workspace.");
-        }
-
-        AppUser user = null;
-        if (clerkUserId != null && !clerkUserId.isBlank()) {
-            user = userRepository.findByClerkUserId(clerkUserId.trim()).orElse(null);
-        }
-        if (user == null && userEmail != null && !userEmail.isBlank()) {
-            user = userRepository.findByEmail(userEmail.trim().toLowerCase()).orElse(null);
-        }
-
-        if (user == null) {
-            String safeEmail = (userEmail != null && !userEmail.isBlank())
-                    ? userEmail.trim().toLowerCase()
-                    : ("user_" + java.util.UUID.randomUUID().toString().substring(0, 8) + "@weddingos.app");
-            String safeClerkId = (clerkUserId != null && !clerkUserId.isBlank())
-                    ? clerkUserId.trim()
-                    : ("clerk_" + java.util.UUID.randomUUID().toString().substring(0, 12));
-            String safeName = (userName != null && !userName.isBlank())
-                    ? userName.trim()
-                    : safeEmail.split("@")[0];
-
-            user = new AppUser(safeClerkId, safeEmail, safeName);
-            user = userRepository.save(user);
-        } else {
-            boolean changed = false;
-            if (clerkUserId != null && !clerkUserId.isBlank() && !clerkUserId.equals(user.getClerkUserId())) {
-                user.setClerkUserId(clerkUserId.trim());
-                changed = true;
-            }
-            if (userName != null && !userName.isBlank() && !userName.equals(user.getFullName())) {
-                user.setFullName(userName.trim());
-                changed = true;
-            }
-            if (changed) {
-                user = userRepository.save(user);
-            }
-        }
-
+    public Map<String, Object> getWorkspaceForUser(Long requestedWeddingId) {
+        AppUser user = access.currentUser();
         Wedding wedding = null;
 
         // If a specific wedding ID was requested, verify the user owns it or has membership
@@ -230,33 +197,21 @@ public class WorkspaceService {
             slug.setIsActive(true);
             slugRepository.save(slug);
 
-            WeddingMembership ownerMembership = new WeddingMembership();
-            ownerMembership.setWedding(wedding);
-            ownerMembership.setUser(user);
-            ownerMembership.setRole(WeddingMembership.Role.ADMIN);
-            ownerMembership.setTitle("Host & Primary Admin");
-            ownerMembership.setCanManageEvents(true);
-            ownerMembership.setCanManageTasks(true);
-            ownerMembership.setCanManageGuests(true);
-            ownerMembership.setCanCheckInGuests(true);
-            ownerMembership.setCanManageExpenses(true);
-            ownerMembership.setCanManageVendors(true);
-            ownerMembership.setCanManageWebsite(true);
-            ownerMembership.setCanModerateGallery(true);
-            membershipRepository.save(ownerMembership);
+            membershipRepository.save(adminMembership(wedding, user, "Host & Primary Admin"));
         }
 
-        return getActiveWorkspaceSummary(wedding.getId());
+        return summaryFor(access.requireMember(wedding.getId()));
     }
 
     public Wedding updateBudgetTarget(Long weddingId, BigDecimal newBudgetTarget) {
-        Wedding wedding = requireWedding(weddingId);
+        Wedding wedding = access.require(weddingId, WeddingModule.EXPENSES).wedding();
         wedding.setTotalBudgetTarget(newBudgetTarget != null ? newBudgetTarget : BigDecimal.ZERO);
         return weddingRepository.save(wedding);
     }
 
+    /** Couple details and public slug: admins, or organizers with the WEBSITE permission. */
     public Wedding updateWeddingDetails(Long weddingId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, String slug) {
-        Wedding wedding = requireWedding(weddingId);
+        Wedding wedding = access.require(weddingId, WeddingModule.WEBSITE).wedding();
 
         if (brideName != null) wedding.setBrideName(brideName.trim());
         if (groomName != null) wedding.setGroomName(groomName.trim());
@@ -268,6 +223,10 @@ public class WorkspaceService {
         if (slug != null && !slug.trim().isEmpty()) {
             String cleanSlug = slug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-");
             WeddingSlug existingSlug = slugRepository.findByWeddingId(saved.getId()).orElse(null);
+            boolean unchanged = existingSlug != null && cleanSlug.equals(existingSlug.getSlug());
+            if (!unchanged && slugRepository.existsBySlug(cleanSlug)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "That website address is already taken.");
+            }
             if (existingSlug != null) {
                 existingSlug.setSlug(cleanSlug);
                 existingSlug.setIsActive(true);
@@ -284,33 +243,17 @@ public class WorkspaceService {
         return saved;
     }
 
-    /**
-     * Resolves the workspace owner from an explicit user ID or the caller's identity headers.
-     * Never defaults to user ID 1 or "the first user".
-     */
-    private AppUser resolveOwner(Long ownerUserId, String ownerEmail, String ownerClerkUserId) {
-        if (ownerUserId != null) {
-            return userRepository.findById(ownerUserId)
-                    .orElseThrow(() -> new NotFoundException("Owner user not found: " + ownerUserId));
-        }
-        Optional<AppUser> byIdentity = Optional.empty();
-        if (ownerClerkUserId != null && !ownerClerkUserId.isBlank()) {
-            byIdentity = userRepository.findByClerkUserId(ownerClerkUserId.trim());
-        }
-        if (byIdentity.isEmpty() && ownerEmail != null && !ownerEmail.isBlank()) {
-            byIdentity = userRepository.findByEmail(ownerEmail.trim().toLowerCase());
-        }
-        if (byIdentity.isPresent()) {
-            return byIdentity.get();
-        }
-        if ((ownerEmail == null || ownerEmail.isBlank()) && (ownerClerkUserId == null || ownerClerkUserId.isBlank())) {
-            throw new BadRequestException("An owner is required: provide ownerUserId or a signed-in user identity.");
-        }
-        throw new NotFoundException("Owner user not found for the supplied identity.");
-    }
+    /** Creates a wedding owned by the signed-in user (never a client-supplied or default owner). */
+    public Wedding createWorkspace(String brideName, String groomName, LocalDate weddingDate, String city, String venueName, BigDecimal totalBudget, String slug) {
+        AppUser owner = access.currentUser();
 
-    public Wedding createWorkspace(Long ownerUserId, String ownerEmail, String ownerClerkUserId, String brideName, String groomName, LocalDate weddingDate, String city, String venueName, BigDecimal totalBudget, String slug) {
-        AppUser owner = resolveOwner(ownerUserId, ownerEmail, ownerClerkUserId);
+        String cleanSlug = null;
+        if (slug != null && !slug.isBlank()) {
+            cleanSlug = slug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-");
+            if (slugRepository.existsBySlug(cleanSlug)) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "That website address is already taken.");
+            }
+        }
 
         Wedding wedding = new Wedding();
         wedding.setOwnerUser(owner);
@@ -322,29 +265,40 @@ public class WorkspaceService {
         wedding.setTotalBudgetTarget(totalBudget != null ? totalBudget : BigDecimal.ZERO);
         Wedding saved = weddingRepository.save(wedding);
 
-        if (slug != null && !slug.isBlank()) {
+        if (cleanSlug != null) {
             WeddingSlug weddingSlug = new WeddingSlug();
             weddingSlug.setWedding(saved);
-            weddingSlug.setSlug(slug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-"));
+            weddingSlug.setSlug(cleanSlug);
             weddingSlug.setIsActive(true);
             slugRepository.save(weddingSlug);
         }
 
-        // Auto-provision initial Admin membership
-        WeddingMembership membership = new WeddingMembership();
-        membership.setWedding(saved);
-        membership.setUser(owner);
-        membership.setRole(WeddingMembership.Role.ADMIN);
-        membership.setTitle("Workspace Owner & Admin");
-        membershipRepository.save(membership);
+        membershipRepository.save(adminMembership(saved, owner, "Workspace Owner & Admin"));
 
         return saved;
+    }
+
+    private static WeddingMembership adminMembership(Wedding wedding, AppUser user, String title) {
+        WeddingMembership membership = new WeddingMembership();
+        membership.setWedding(wedding);
+        membership.setUser(user);
+        membership.setRole(WeddingMembership.Role.ADMIN);
+        membership.setTitle(title);
+        membership.setCanManageEvents(true);
+        membership.setCanManageTasks(true);
+        membership.setCanManageGuests(true);
+        membership.setCanCheckInGuests(true);
+        membership.setCanManageExpenses(true);
+        membership.setCanManageVendors(true);
+        membership.setCanManageWebsite(true);
+        membership.setCanModerateGallery(true);
+        return membership;
     }
 
     @Transactional
     public Map<String, Object> resetWorkspaceData(Long weddingId) {
         // NOTE: the HTTP reset endpoints are currently disabled (see WorkspaceController).
-        Wedding wedding = requireWedding(weddingId);
+        Wedding wedding = access.requireAdmin(weddingId).wedding();
 
         Long activeId = wedding.getId();
 

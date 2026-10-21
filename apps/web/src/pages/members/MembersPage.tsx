@@ -27,8 +27,6 @@ import {
   Send,
   CheckCircle2,
   Key,
-  Eye,
-  EyeOff,
   RefreshCw,
 } from 'lucide-react'
 import type {
@@ -123,7 +121,6 @@ export default function MembersPage() {
   const [createdCredentials, setCreatedCredentials] = useState<{
     name: string
     email: string
-    password: string
     role: WorkspaceRole
     title?: string
   } | null>(null)
@@ -132,12 +129,10 @@ export default function MembersPage() {
   const [inviteForm, setInviteForm] = useState({
     targetEmail: '',
     targetName: '',
-    password: '',
     title: '',
     role: 'ORGANIZER' as WorkspaceRole,
     permissions: { ...DEFAULT_ORGANIZER_PERMISSIONS },
   })
-  const [showInvitePassword, setShowInvitePassword] = useState(false)
 
   // Edit Member Form State
   const [editForm, setEditForm] = useState({
@@ -184,14 +179,13 @@ export default function MembersPage() {
     setTimeout(() => setErrorMessage(null), 6000)
   }
 
-  // Handle Assigning Team Member with Email & Password
+  // Handle adding a team member by email (they sign in with Clerk; no password is assigned)
   const handleInviteSubmit = (e: FormEvent) => {
     e.preventDefault()
     try {
       const newMember = assignTeamMember({
         fullName: inviteForm.targetName,
         email: inviteForm.targetEmail,
-        password: inviteForm.password,
         role: inviteForm.role,
         title: inviteForm.title,
         modulePermissions: inviteForm.role === 'ADMIN' ? ALL_PERMISSIONS_ENABLED : inviteForm.permissions,
@@ -202,22 +196,19 @@ export default function MembersPage() {
       setCreatedCredentials({
         name: newMember.fullName,
         email: newMember.email,
-        password: inviteForm.password,
         role: newMember.role,
         title: newMember.title,
       })
-      showSuccess(`Assigned "${newMember.fullName}" as ${newMember.role}! Login credentials are created.`)
+      showSuccess(`Added "${newMember.fullName}" as ${newMember.role}. Ask them to sign up with this email to get access.`)
 
       // Reset form
       setInviteForm({
         targetEmail: '',
         targetName: '',
-        password: '',
         title: '',
         role: 'ORGANIZER',
         permissions: { ...DEFAULT_ORGANIZER_PERMISSIONS },
       })
-      setShowInvitePassword(false)
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Failed to assign team member'
       showError(msg)
@@ -302,7 +293,7 @@ export default function MembersPage() {
   // Copy created credentials
   const handleCopyCredentials = () => {
     if (!createdCredentials) return
-    const text = `WeddingOS Workspace Access Credentials\nLogin URL: ${window.location.origin}/sign-in\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\nRole: ${createdCredentials.role}`
+    const text = `You have been added to a WeddingOS wedding workspace.\nCreate your account (or sign in) at: ${window.location.origin}/sign-up\nUse this email: ${createdCredentials.email}\nRole: ${createdCredentials.role}`
     navigator.clipboard.writeText(text)
     setCopiedCreds(true)
     setTimeout(() => setCopiedCreds(false), 2500)
@@ -359,7 +350,7 @@ export default function MembersPage() {
             </h1>
             <p className="text-sm text-[#4b030e]/80 mt-1 max-w-2xl">
               Workspace access for <strong>{wedding.brideName || 'Wedding'} &amp; {wedding.groomName}’s</strong> planning team.
-              Assign Co-Organizers or Admins with their email and password so they can log in to this dashboard.
+              Add Co-Organizers or Admins by email. They sign up with that email to access this dashboard.
             </p>
           </div>
 
@@ -464,7 +455,7 @@ export default function MembersPage() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold text-[10px] uppercase tracking-wider">
-                ✓ Account Created &amp; Access Granted
+                ✓ Member Added
               </span>
               <span className="font-bold text-sm text-[#4b030e]">{createdCredentials.name}</span>
             </div>
@@ -474,17 +465,13 @@ export default function MembersPage() {
           </div>
 
           <p className="text-xs text-emerald-900">
-            This member can now log in directly at <strong className="font-mono text-[#6f0617]">{window.location.origin}/sign-in</strong> using the credentials below:
+            Ask this member to create their account at <strong className="font-mono text-[#6f0617]">{window.location.origin}/sign-up</strong> using the email below. Their access is linked automatically once the email is verified.
           </p>
 
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white/90 p-3 rounded-xl border border-emerald-300">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-white/90 p-3 rounded-xl border border-emerald-300">
             <div>
-              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Email / Username</span>
+              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Email</span>
               <span className="font-mono font-bold text-neutral-800 text-xs break-all">{createdCredentials.email}</span>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Password</span>
-              <span className="font-mono font-bold text-[#6f0617] text-xs">{createdCredentials.password}</span>
             </div>
             <div>
               <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Assigned Role</span>
@@ -498,7 +485,7 @@ export default function MembersPage() {
               className="px-3.5 py-1.5 rounded-lg bg-[#6f0617] text-white font-sans text-xs font-semibold hover:bg-[#4b030e] flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
               {copiedCreds ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-              {copiedCreds ? 'Copied Login Details!' : 'Copy Login Details (Share via WhatsApp)'}
+              {copiedCreds ? 'Copied Invite Message!' : 'Copy Invite Message (Share via WhatsApp)'}
             </button>
             <button
               onClick={() => setCreatedCredentials(null)}
@@ -933,7 +920,7 @@ export default function MembersPage() {
               Assign Co-Organizer or Admin
             </h3>
             <p className="text-xs text-neutral-500 mt-1">
-              Provide their name, email, and assign an access password so they can log in to this wedding dashboard directly.
+              Provide their name and email. They create their own account with that email; access is linked automatically once the email is verified.
             </p>
 
             <form onSubmit={handleInviteSubmit} className="space-y-4 mt-5 text-xs">
@@ -951,45 +938,19 @@ export default function MembersPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
-                    Login Email Address *
-                  </label>
-                  <input
-                    type="email"
-                    required
-                    value={inviteForm.targetEmail}
-                    onChange={(e) => setInviteForm({ ...inviteForm, targetEmail: e.target.value })}
-                    placeholder="e.g. vikram@weddingcraft.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
-                  />
-                </div>
-
-                <div>
-                  <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
-                    Access Password *
-                  </label>
-                  <div className="relative">
-                    <input
-                      type={showInvitePassword ? 'text' : 'password'}
-                      required
-                      minLength={4}
-                      value={inviteForm.password}
-                      onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
-                      placeholder="e.g. Wedding2026!"
-                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowInvitePassword(!showInvitePassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
-                    >
-                      {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  <span className="text-[10px] text-neutral-400 mt-0.5 block">Used by them to log in at /sign-in</span>
-                </div>
+              <div>
+                <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
+                  Login Email Address *
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={inviteForm.targetEmail}
+                  onChange={(e) => setInviteForm({ ...inviteForm, targetEmail: e.target.value })}
+                  placeholder="e.g. vikram@weddingcraft.com"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
+                />
+                <span className="text-[10px] text-neutral-400 mt-0.5 block">They sign up at /sign-up with this exact email</span>
               </div>
 
               <div>

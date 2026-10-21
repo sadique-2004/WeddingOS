@@ -14,8 +14,6 @@ import {
   Award,
 } from 'lucide-react'
 
-import { loginLocalUser, loginDemoUser } from '../../services/authService'
-
 export default function SignInPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -30,23 +28,23 @@ export default function SignInPage() {
 
   const handleGoogleSignIn = async () => {
     setError('')
-    if (isLoaded && signIn) {
-      try {
-        const targetRedirect = redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`
-        await signIn.authenticateWithRedirect({
-          strategy: 'oauth_google',
-          redirectUrl: `${window.location.origin}/sso-callback`,
-          redirectUrlComplete: `${window.location.origin}${targetRedirect}`,
-        })
-        return
-      } catch (err: any) {
-        console.warn('Clerk Google redirect failed, falling back to demo session:', err)
-      }
+    if (!isLoaded || !signIn) {
+      setError('Sign-in is still loading. Please try again in a moment.')
+      return
     }
-    loginDemoUser('bride')
-    navigate(redirectUrl)
+    try {
+      const targetRedirect = redirectUrl.startsWith('/') ? redirectUrl : `/${redirectUrl}`
+      await signIn.authenticateWithRedirect({
+        strategy: 'oauth_google',
+        redirectUrl: `${window.location.origin}/sso-callback`,
+        redirectUrlComplete: `${window.location.origin}${targetRedirect}`,
+      })
+    } catch (err: any) {
+      setError(err?.errors?.[0]?.longMessage || 'Google sign-in could not be started. Please try again.')
+    }
   }
 
+  // Clerk is the only sign-in path: there is no local, password-cache or demo fallback.
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')
@@ -55,36 +53,35 @@ export default function SignInPage() {
       setError('Please provide both your email address and password.')
       return
     }
-
-    setIsLoading(true)
-
-    // 1. Try Clerk if available and healthy
-    if (isLoaded && signIn) {
-      try {
-        const result = await signIn.create({
-          identifier: email,
-          password: password,
-        })
-
-        if (result.status === 'complete') {
-          await setActive({ session: result.createdSessionId })
-          loginLocalUser(email, password)
-          navigate(redirectUrl)
-          return
-        }
-      } catch (err: any) {
-        console.warn('Clerk signIn error, attempting local authentication fallback:', err)
-      }
+    if (!isLoaded || !signIn) {
+      setError('Sign-in is still loading. Please try again in a moment.')
+      return
     }
 
-    // 2. Local Session Login fallback (guaranteed to log the user in)
+    setIsLoading(true)
     try {
-      loginLocalUser(email, password)
-      setIsLoading(false)
-      navigate(redirectUrl)
+      const result = await signIn.create({
+        identifier: email.trim(),
+        password: password,
+      })
+
+      if (result.status === 'complete') {
+        await setActive({ session: result.createdSessionId })
+        navigate(redirectUrl)
+        return
+      }
+      setError('Additional verification is required to finish signing in. Please use the code sent by email, or try Google sign-in.')
     } catch (err: any) {
+      const code = err?.errors?.[0]?.code
+      if (code === 'form_identifier_not_found') {
+        setError(
+          'No account was found for this email. If you used WeddingOS before secure sign-in was introduced, please create your account again with the same email — your existing workspace will be linked automatically.'
+        )
+      } else {
+        setError(err?.errors?.[0]?.longMessage || 'Incorrect email or password. Please try again.')
+      }
+    } finally {
       setIsLoading(false)
-      setError('Authentication failed. Please verify and try again.')
     }
   }
 
@@ -338,42 +335,6 @@ export default function SignInPage() {
                   </>
                 )}
               </button>
-
-              {/* 1-Click Instant Demo Login (For Students, Evaluators & Quick Testing) */}
-              <div className="pt-2 border-t border-neutral-200/80">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-neutral-500">
-                    1-Click Demo Access
-                  </span>
-                  <span className="text-[9px] px-2 py-0.5 rounded-full bg-[#e6bd81]/25 text-[#73430f] font-bold">
-                    No Password Needed
-                  </span>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginDemoUser('bride')
-                      navigate(redirectUrl)
-                    }}
-                    className="h-9 px-3 rounded-lg bg-[#faf7f2] border border-[#e6bd81]/50 hover:bg-[#f5ecdd] text-[#4b030e] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#b88444]" />
-                    <span>Demo (Bride)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      loginDemoUser('groom')
-                      navigate(redirectUrl)
-                    }}
-                    className="h-9 px-3 rounded-lg bg-[#faf7f2] border border-[#e6bd81]/50 hover:bg-[#f5ecdd] text-[#4b030e] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
-                  >
-                    <Sparkles className="w-3.5 h-3.5 text-[#b88444]" />
-                    <span>Demo (Groom)</span>
-                  </button>
-                </div>
-              </div>
 
               {/* Secondary Switcher Card */}
               <div className="pt-1">

@@ -1,49 +1,50 @@
 package com.weddingos.api.service;
 
 import com.weddingos.api.exception.NotFoundException;
-import com.weddingos.api.model.Wedding;
 import com.weddingos.api.model.WeddingEvent;
 import com.weddingos.api.repository.WeddingEventRepository;
-import com.weddingos.api.repository.WeddingRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+
+import static com.weddingos.api.security.WeddingAccessService.weddingIdOf;
 
 @Service
 @Transactional
 public class EventService {
 
     private final WeddingEventRepository eventRepository;
-    private final WeddingRepository weddingRepository;
+    private final WeddingAccessService access;
 
-    public EventService(WeddingEventRepository eventRepository, WeddingRepository weddingRepository) {
+    public EventService(WeddingEventRepository eventRepository, WeddingAccessService access) {
         this.eventRepository = eventRepository;
-        this.weddingRepository = weddingRepository;
+        this.access = access;
     }
 
     @Transactional(readOnly = true)
     public List<WeddingEvent> getEvents(Long weddingId) {
+        access.require(weddingId, WeddingModule.EVENTS);
         return eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(weddingId);
     }
 
     @Transactional(readOnly = true)
     public WeddingEvent getEventById(Long eventId) {
-        return eventRepository.findById(eventId)
-                .orElseThrow(() -> new NotFoundException("Ceremony event not found with ID: " + eventId));
+        return loadAuthorized(eventId);
     }
 
     public WeddingEvent createEvent(Long weddingId, WeddingEvent event) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
-        event.setWedding(wedding);
+        var granted = access.require(weddingId, WeddingModule.EVENTS);
+        event.setId(null); // never let a client-supplied ID overwrite an existing row
+        event.setWedding(granted.wedding());
         return eventRepository.save(event);
     }
 
     public WeddingEvent updateEvent(Long eventId, WeddingEvent updates) {
-        WeddingEvent existing = eventRepository.findById(eventId)
-                .orElseThrow(() -> new NotFoundException("Event not found: " + eventId));
-        
+        WeddingEvent existing = loadAuthorized(eventId);
+
         if (updates.getName() != null) existing.setName(updates.getName());
         if (updates.getDescription() != null) existing.setDescription(updates.getDescription());
         if (updates.getEventType() != null) existing.setEventType(updates.getEventType());
@@ -63,6 +64,14 @@ public class EventService {
     }
 
     public void deleteEvent(Long eventId) {
-        eventRepository.deleteById(eventId);
+        eventRepository.delete(loadAuthorized(eventId));
+    }
+
+    /** Loads an event and checks EVENTS permission on the wedding that owns it. */
+    private WeddingEvent loadAuthorized(Long eventId) {
+        WeddingEvent event = eventRepository.findById(eventId)
+                .orElseThrow(() -> new NotFoundException("Event not found: " + eventId));
+        access.require(weddingIdOf(event.getWedding()), WeddingModule.EVENTS);
+        return event;
     }
 }

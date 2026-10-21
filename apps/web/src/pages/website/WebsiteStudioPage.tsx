@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
+import { getLocalAuthSession } from '../../services/authService'
 import {
   Globe,
   Sparkles,
@@ -20,6 +23,9 @@ import {
   Calendar,
   MapPin,
   Video,
+  Heart,
+  ArrowRight,
+  Info,
 } from 'lucide-react'
 import PublicWeddingPage from '../public/PublicWeddingPage'
 import type { PublicWebsiteConfig } from '../../types/website'
@@ -53,6 +59,19 @@ const CEREMONY_COVER_PHOTOS = [
 ]
 
 export default function WebsiteStudioPage() {
+  const { user } = useUser()
+  const localUser = getLocalAuthSession()
+  const email = user?.primaryEmailAddress?.emailAddress || localUser?.email || ''
+  const clerkId = user?.id || localUser?.id || ''
+  const fullName =
+    user?.fullName ||
+    [user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+    localUser?.fullName ||
+    ''
+  const userScopeKey = email
+    ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
+    : 'weddingos_active_wedding'
+
   const [config, setConfig] = useState<PublicWebsiteConfig>(() => {
     try {
       const stored = localStorage.getItem('weddingos_website_config')
@@ -68,11 +87,30 @@ export default function WebsiteStudioPage() {
   const [copied, setCopied] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
 
-  // Fetch real database details on mount
+  // Fetch real database details on mount and synchronize with user wedding profile
   useEffect(() => {
+    // 1. Initial check from local profile cache for immediate display
+    try {
+      const storedProfile = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
+      if (storedProfile) {
+        const p = JSON.parse(storedProfile)
+        setConfig(prev => ({
+          ...prev,
+          brideName: p.brideName !== undefined ? p.brideName : prev.brideName,
+          groomName: p.groomName !== undefined ? p.groomName : prev.groomName,
+          weddingDate: p.weddingDate !== undefined ? p.weddingDate : prev.weddingDate,
+          locationName: p.venueName || p.city || p.locationName || prev.locationName,
+          slug: p.slug || prev.slug,
+        }))
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Fetch from backend API
     const wid = getActiveWeddingId()
     Promise.allSettled([
-      workspacesApi.getActive(wid),
+      workspacesApi.getActive(wid, email, clerkId, fullName),
       websiteApi.getConfig(wid)
     ]).then(([workspaceResult, siteResult]) => {
       let updated: Partial<PublicWebsiteConfig> = {}
@@ -80,11 +118,11 @@ export default function WebsiteStudioPage() {
         const w = workspaceResult.value
         updated = {
           ...updated,
-          brideName: w.brideName || config.brideName,
-          groomName: w.groomName || config.groomName,
-          weddingDate: w.weddingDate || config.weddingDate,
-          locationName: w.venueName || w.city || config.locationName,
-          slug: w.slug || config.slug,
+          brideName: w.brideName || '',
+          groomName: w.groomName || '',
+          weddingDate: w.weddingDate || '',
+          locationName: w.venueName || w.city || '',
+          slug: w.slug || 'our-wedding',
         }
       }
       if (siteResult.status === 'fulfilled' && siteResult.value) {
@@ -106,7 +144,32 @@ export default function WebsiteStudioPage() {
         setConfig(prev => ({ ...prev, ...updated }))
       }
     }).catch(err => console.warn('Could not load studio config from backend:', err))
-  }, [])
+
+    // 3. Listen to profile updates dispatched from Profile page
+    const handleProfileSync = () => {
+      try {
+        const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
+        if (stored) {
+          const p = JSON.parse(stored)
+          setConfig(prev => ({
+            ...prev,
+            brideName: p.brideName !== undefined ? p.brideName : prev.brideName,
+            groomName: p.groomName !== undefined ? p.groomName : prev.groomName,
+            weddingDate: p.weddingDate !== undefined ? p.weddingDate : prev.weddingDate,
+            locationName: p.venueName || p.city || p.locationName || prev.locationName,
+            slug: p.slug || prev.slug,
+          }))
+        }
+      } catch {}
+    }
+
+    window.addEventListener('weddingos_wedding_updated', handleProfileSync)
+    window.addEventListener('weddingos_active_wedding_changed', handleProfileSync)
+    return () => {
+      window.removeEventListener('weddingos_wedding_updated', handleProfileSync)
+      window.removeEventListener('weddingos_active_wedding_changed', handleProfileSync)
+    }
+  }, [email, clerkId, userScopeKey])
 
   // Save to localStorage whenever config changes
   useEffect(() => {
@@ -143,14 +206,15 @@ export default function WebsiteStudioPage() {
     }
 
     // 2. Parallel background sync to backend
+    // Preserves profile couple details and only updates slug & website customizations
     Promise.allSettled([
       workspacesApi.updateDetails({
-        brideName: config.brideName.trim(),
-        groomName: config.groomName.trim(),
-        weddingDate: config.weddingDate,
-        venueName: config.locationName.trim(),
-        city: config.locationName.trim(),
         slug: config.slug.trim(),
+        brideName: config.brideName || undefined,
+        groomName: config.groomName || undefined,
+        weddingDate: config.weddingDate || undefined,
+        venueName: config.locationName || undefined,
+        city: config.locationName || undefined,
       }, wid),
       websiteApi.updateConfig({
         themeKey: config.themeKey as any,
@@ -451,77 +515,113 @@ export default function WebsiteStudioPage() {
 
           {/* TAB 2: CONTENT & STORY EDITOR */}
           {activeTab === 'content' && (
-            <div className="bg-white p-5 rounded-3xl border border-[#e6bd81]/40 shadow-xs space-y-4">
+            <div className="bg-white p-5 rounded-3xl border border-[#e6bd81]/40 shadow-xs space-y-5">
               <div className="space-y-1">
                 <h3 className="font-cormorant text-xl font-bold text-[#4b030e]">
-                  Couple &amp; Invitation Content
+                  Invitation Content &amp; Story
                 </h3>
                 <p className="text-xs text-neutral-500">
-                  Customize the headline and ceremonial welcome letter shown to guests.
+                  Customize the welcome headline and love story letter shown to guests on your wedding portal.
                 </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-neutral-700">Bride's Name</label>
-                  <input
-                    type="text"
-                    value={config.brideName}
-                    onChange={(e) => setConfig({ ...config, brideName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none"
-                  />
+              {/* READ-ONLY PROFILE SYNC CARD (Couple, Date & Location from Profile) */}
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-[#faf4ec] via-[#fdfbf7] to-[#f6ecde] border border-[#e6bd81]/70 shadow-2xs space-y-3">
+                <div className="flex items-center justify-between gap-2 border-b border-[#e6bd81]/30 pb-2.5">
+                  <span className="px-2.5 py-0.5 rounded-full bg-[#3a0208] text-[#e6bd81] text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 shadow-2xs">
+                    <Sparkles className="w-3 h-3 text-[#e6bd81]" />
+                    Synced from Wedding Profile
+                  </span>
+
+                  <Link
+                    to="/app/profile"
+                    className="text-[11px] font-bold text-[#6f0617] hover:text-[#4b030e] flex items-center gap-1 transition-colors hover:underline group cursor-pointer"
+                  >
+                    <span>Edit in Profile</span>
+                    <ArrowRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-neutral-700">Groom's Name</label>
-                  <input
-                    type="text"
-                    value={config.groomName}
-                    onChange={(e) => setConfig({ ...config, groomName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none"
-                  />
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
+                  {/* Couple */}
+                  <div className="p-2.5 rounded-xl bg-white/80 border border-[#e6bd81]/40">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                      <Heart className="w-3 h-3 text-[#6f0617]" />
+                      Couple
+                    </span>
+                    <p className="font-cormorant text-base font-bold text-[#4b030e] truncate" title={`${config.brideName || 'Bride'} & ${config.groomName || 'Groom'}`}>
+                      {config.brideName && config.groomName
+                        ? `${config.brideName} & ${config.groomName}`
+                        : config.brideName || config.groomName || 'Couple Not Set'}
+                    </p>
+                  </div>
+
+                  {/* Date */}
+                  <div className="p-2.5 rounded-xl bg-white/80 border border-[#e6bd81]/40">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                      <Calendar className="w-3 h-3 text-[#b88444]" />
+                      Wedding Date
+                    </span>
+                    <p className="text-xs font-semibold text-neutral-800">
+                      {config.weddingDate
+                        ? new Date(config.weddingDate).toLocaleDateString('en-US', {
+                            day: 'numeric',
+                            month: 'short',
+                            year: 'numeric',
+                          })
+                        : 'Date Not Set'}
+                    </p>
+                  </div>
+
+                  {/* Location */}
+                  <div className="p-2.5 rounded-xl bg-white/80 border border-[#e6bd81]/40">
+                    <span className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider flex items-center gap-1 mb-0.5">
+                      <MapPin className="w-3 h-3 text-[#b88444]" />
+                      Venue / City
+                    </span>
+                    <p className="text-xs font-semibold text-neutral-800 truncate" title={config.locationName || 'Venue not set'}>
+                      {config.locationName || 'Venue Not Set'}
+                    </p>
+                  </div>
                 </div>
+
+                <p className="text-[10px] text-neutral-500 italic flex items-center gap-1 pt-0.5">
+                  <Info className="w-3 h-3 text-[#b88444] shrink-0 inline" />
+                  <span>Bride &amp; groom names, date, and venue are configured in Profile and automatically reflected across your wedding website.</span>
+                </p>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-neutral-700">Wedding Date</label>
-                  <input
-                    type="date"
-                    value={config.weddingDate}
-                    onChange={(e) => setConfig({ ...config, weddingDate: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none"
-                  />
+              {/* WELCOME HEADLINE */}
+              <div className="space-y-1.5 pt-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#4b030e]">
+                    Welcome Headline
+                  </label>
+                  <span className="text-[10px] text-neutral-400">Greeting title for guests</span>
                 </div>
-                <div className="space-y-1">
-                  <label className="text-[11px] font-bold text-neutral-700">Location / City</label>
-                  <input
-                    type="text"
-                    value={config.locationName}
-                    onChange={(e) => setConfig({ ...config, locationName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1 pt-2">
-                <label className="text-[11px] font-bold text-neutral-700">Welcome Headline</label>
                 <input
                   type="text"
                   value={config.welcomeHeadline}
                   onChange={(e) => setConfig({ ...config, welcomeHeadline: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none"
-                  placeholder="Together with our families..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617]/20 focus:outline-none bg-white transition-all shadow-2xs"
+                  placeholder="Welcome to Our Wedding Celebration"
                 />
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[11px] font-bold text-neutral-700">Welcome Letter / Story</label>
+              {/* WELCOME LETTER / STORY */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#4b030e]">
+                    Welcome Letter / Love Story
+                  </label>
+                  <span className="text-[10px] text-neutral-400">Ceremonial invitation text</span>
+                </div>
                 <textarea
-                  rows={4}
+                  rows={5}
                   value={config.welcomeMessage}
                   onChange={(e) => setConfig({ ...config, welcomeMessage: e.target.value })}
-                  className="w-full px-3 py-2 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:outline-none leading-relaxed"
-                  placeholder="Two hearts, two lineages..."
+                  className="w-full px-3.5 py-2.5 text-xs rounded-xl border border-neutral-200 focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617]/20 focus:outline-none leading-relaxed bg-white transition-all shadow-2xs"
+                  placeholder="With the blessings of our elders and loved ones, we joyfully invite you to celebrate our union..."
                 />
               </div>
             </div>

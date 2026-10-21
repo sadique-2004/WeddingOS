@@ -1,5 +1,6 @@
 package com.weddingos.api.controller;
 
+import com.weddingos.api.dto.PublicInvitationView;
 import com.weddingos.api.model.FamilyInvitation;
 import com.weddingos.api.service.InvitationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -60,17 +61,19 @@ public class InvitationController {
     // --------------------------------------------------------------------------
     @GetMapping("/public/invite/{token}")
     @Operation(summary = "Public endpoint for guest digital pass and live QR lookup")
-    public ResponseEntity<FamilyInvitation> getPublicInvitation(@PathVariable String token) {
-        return ResponseEntity.ok(invitationService.getByToken(token));
+    public ResponseEntity<PublicInvitationView> getPublicInvitation(@PathVariable String token) {
+        return ResponseEntity.ok(invitationService.getPublicInvitation(token));
     }
 
     @PostMapping("/public/invite/{token}/rsvp")
     @Operation(summary = "Public endpoint for guest RSVP confirmation submission")
-    public ResponseEntity<FamilyInvitation> submitPublicRsvp(
+    public ResponseEntity<PublicInvitationView> submitPublicRsvp(
             @PathVariable String token,
             @RequestBody Map<String, Object> payload) {
-        Integer count = payload.containsKey("actualAttendees") ? Integer.parseInt(payload.get("actualAttendees").toString()) : null;
-        FamilyInvitation.RsvpStatus status = FamilyInvitation.RsvpStatus.valueOf(payload.get("rsvpStatus").toString());
+        Integer count = payload.get("actualAttendees") != null ? Integer.parseInt(payload.get("actualAttendees").toString()) : null;
+        FamilyInvitation.RsvpStatus status = payload.get("rsvpStatus") != null
+                ? FamilyInvitation.RsvpStatus.valueOf(payload.get("rsvpStatus").toString())
+                : null;
         String dietaryNotes = (String) payload.get("dietaryNotes");
         return ResponseEntity.ok(invitationService.submitRsvp(token, count, status, dietaryNotes));
     }

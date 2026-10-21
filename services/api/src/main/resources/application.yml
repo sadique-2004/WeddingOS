@@ -39,3 +39,17 @@ springdoc:
 cloudinary:
   url: ${CLOUDINARY_URL:}
 
+# Clerk authentication (bearer session tokens). No secrets have defaults.
+# CLERK_ISSUER:            e.g. https://<your-instance>.clerk.accounts.dev (required; without it all private routes return 401)
+# CLERK_JWKS_URL:          optional; defaults to ${CLERK_ISSUER}/.well-known/jwks.json
+# CLERK_AUTHORIZED_PARTIES: comma-separated allowed frontend origins checked against the token's azp claim
+# CLERK_AUDIENCE:          optional; only checked when set
+# CLERK_SECRET_KEY:        Clerk Backend API key, needed to link first-time sign-ins to existing users by verified email
+clerk:
+  issuer: ${CLERK_ISSUER:}
+  jwks-url: ${CLERK_JWKS_URL:}
+  authorized-parties: ${CLERK_AUTHORIZED_PARTIES:}
+  audience: ${CLERK_AUDIENCE:}
+  secret-key: ${CLERK_SECRET_KEY:}
+  api-url: ${CLERK_API_URL:https://api.clerk.com/v1}
+

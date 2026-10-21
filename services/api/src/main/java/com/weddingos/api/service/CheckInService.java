@@ -6,7 +6,8 @@ import com.weddingos.api.model.FamilyInvitation;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.CheckInLogRepository;
 import com.weddingos.api.repository.FamilyInvitationRepository;
-import com.weddingos.api.repository.WeddingRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,18 +20,19 @@ public class CheckInService {
 
     private final FamilyInvitationRepository invitationRepository;
     private final CheckInLogRepository logRepository;
-    private final WeddingRepository weddingRepository;
+    private final WeddingAccessService access;
 
     public CheckInService(FamilyInvitationRepository invitationRepository,
                           CheckInLogRepository logRepository,
-                          WeddingRepository weddingRepository) {
+                          WeddingAccessService access) {
         this.invitationRepository = invitationRepository;
         this.logRepository = logRepository;
-        this.weddingRepository = weddingRepository;
+        this.access = access;
     }
 
     @Transactional(readOnly = true)
     public List<FamilyInvitation> searchFamilies(Long weddingId, String query) {
+        access.require(weddingId, WeddingModule.CHECK_IN);
         if (query == null || query.trim().isEmpty()) {
             return invitationRepository.findByWeddingIdOrderByDisplayNameAsc(weddingId);
         }
@@ -38,15 +40,22 @@ public class CheckInService {
     }
 
     public Map<String, Object> verifyAndCheckIn(Long weddingId, String token, Integer attendeeCount, String checkedInBy) {
+        var granted = access.require(weddingId, WeddingModule.CHECK_IN);
+        Wedding wedding = granted.wedding();
+
+        if (token == null || token.isBlank()) {
+            throw new NotFoundException("Invitation not found for the supplied token.");
+        }
         FamilyInvitation invitation = invitationRepository.findByInvitationToken(token)
                 .orElseThrow(() -> new NotFoundException("Invitation not found for the supplied token."));
-
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
+        // A token from another wedding is treated exactly like an unknown token.
+        if (!Objects.equals(invitation.getWedding().getId(), wedding.getId())) {
+            throw new NotFoundException("Invitation not found for the supplied token.");
+        }
 
         boolean alreadyCheckedIn = invitation.getCheckedInAt() != null;
         int countToAdmit = attendeeCount != null ? attendeeCount : (invitation.getActualAttendees() > 0 ? invitation.getActualAttendees() : invitation.getMaxAttendees());
-        String officer = checkedInBy != null && !checkedInBy.isBlank() ? checkedInBy : "Desk Coordinator";
+        String officer = checkedInBy != null && !checkedInBy.isBlank() ? checkedInBy : granted.user().getFullName();
 
         CheckInLog log = new CheckInLog();
         log.setWedding(wedding);
@@ -84,6 +93,7 @@ public class CheckInService {
 
     @Transactional(readOnly = true)
     public List<CheckInLog> getRecentLogs(Long weddingId) {
+        access.require(weddingId, WeddingModule.CHECK_IN);
         return logRepository.findByWeddingIdOrderByScannedAtDesc(weddingId);
     }
 }

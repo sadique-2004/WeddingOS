@@ -2,28 +2,31 @@ package com.weddingos.api.service;
 
 import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.PreparationTask;
-import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.PreparationTaskRepository;
-import com.weddingos.api.repository.WeddingRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
+
+import static com.weddingos.api.security.WeddingAccessService.weddingIdOf;
 
 @Service
 @Transactional
 public class TaskService {
 
     private final PreparationTaskRepository taskRepository;
-    private final WeddingRepository weddingRepository;
+    private final WeddingAccessService access;
 
-    public TaskService(PreparationTaskRepository taskRepository, WeddingRepository weddingRepository) {
+    public TaskService(PreparationTaskRepository taskRepository, WeddingAccessService access) {
         this.taskRepository = taskRepository;
-        this.weddingRepository = weddingRepository;
+        this.access = access;
     }
 
     @Transactional(readOnly = true)
     public List<PreparationTask> getTasks(Long weddingId, String category, PreparationTask.Status status) {
+        access.require(weddingId, WeddingModule.TASKS);
         if (category != null && !category.equalsIgnoreCase("ALL")) {
             return taskRepository.findByWeddingIdAndCategory(weddingId, category);
         }
@@ -34,9 +37,9 @@ public class TaskService {
     }
 
     public PreparationTask createTask(Long weddingId, PreparationTask task) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
-        task.setWedding(wedding);
+        var granted = access.require(weddingId, WeddingModule.TASKS);
+        task.setId(null); // never let a client-supplied ID overwrite an existing row
+        task.setWedding(granted.wedding());
         if (task.getCategory() == null || task.getCategory().isBlank()) {
             task.setCategory("General");
         }
@@ -50,9 +53,8 @@ public class TaskService {
     }
 
     public PreparationTask toggleStatus(Long taskId) {
-        PreparationTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
-        
+        PreparationTask task = loadAuthorized(taskId);
+
         if (task.getStatus() == PreparationTask.Status.COMPLETED) {
             task.setStatus(PreparationTask.Status.TODO);
         } else {
@@ -62,8 +64,7 @@ public class TaskService {
     }
 
     public PreparationTask updateTask(Long taskId, PreparationTask updates) {
-        PreparationTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
+        PreparationTask task = loadAuthorized(taskId);
 
         if (updates.getTitle() != null) task.setTitle(updates.getTitle());
         if (updates.getCategory() != null) task.setCategory(updates.getCategory());
@@ -75,6 +76,14 @@ public class TaskService {
     }
 
     public void deleteTask(Long taskId) {
-        taskRepository.deleteById(taskId);
+        taskRepository.delete(loadAuthorized(taskId));
+    }
+
+    /** Loads a task and checks TASKS permission on the wedding that owns it. */
+    private PreparationTask loadAuthorized(Long taskId) {
+        PreparationTask task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
+        access.require(weddingIdOf(task.getWedding()), WeddingModule.TASKS);
+        return task;
     }
 }

@@ -1,6 +1,7 @@
 import { RouterProvider } from 'react-router-dom'
 import { ClerkProvider } from '@clerk/clerk-react'
 import { router } from './app/router'
+import ClerkAuthBridge from './app/components/ClerkAuthBridge'
 
 const PUBLISHABLE_KEY =
   import.meta.env.VITE_CLERK_PUBLISHABLE_KEY ||
@@ -18,6 +19,7 @@ export default function App() {
       afterSignUpUrl="/app/onboarding"
       afterSignOutUrl="/sign-in"
     >
+      <ClerkAuthBridge />
       <RouterProvider router={router} />
     </ClerkProvider>
   )

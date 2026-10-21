@@ -7,9 +7,10 @@ import com.weddingos.api.model.WeddingEvent;
 import com.weddingos.api.model.WeddingSlug;
 import com.weddingos.api.model.WeddingWebsite;
 import com.weddingos.api.repository.WeddingEventRepository;
-import com.weddingos.api.repository.WeddingRepository;
 import com.weddingos.api.repository.WeddingSlugRepository;
 import com.weddingos.api.repository.WeddingWebsiteRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,36 +23,30 @@ import java.util.Map;
 public class WebsiteService {
 
     private final WeddingWebsiteRepository websiteRepository;
-    private final WeddingRepository weddingRepository;
     private final WeddingSlugRepository slugRepository;
     private final WeddingEventRepository eventRepository;
+    private final WeddingAccessService access;
 
     public WebsiteService(WeddingWebsiteRepository websiteRepository,
-                          WeddingRepository weddingRepository,
                           WeddingSlugRepository slugRepository,
-                          WeddingEventRepository eventRepository) {
+                          WeddingEventRepository eventRepository,
+                          WeddingAccessService access) {
         this.websiteRepository = websiteRepository;
-        this.weddingRepository = weddingRepository;
         this.slugRepository = slugRepository;
         this.eventRepository = eventRepository;
+        this.access = access;
     }
 
-    @Transactional
+    // ---------------- Organizer (authenticated, WEBSITE permission) ----------------
+
     public WeddingWebsite getWebsiteConfig(Long weddingId) {
-        return websiteRepository.findByWeddingId(weddingId)
-                .orElseGet(() -> {
-                    Wedding wedding = weddingRepository.findById(weddingId)
-                            .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
-                    WeddingWebsite site = new WeddingWebsite();
-                    site.setWedding(wedding);
-                    site.setWelcomeHeadline("Celebrating the Sacred Union of " + wedding.getBrideName() + " & " + wedding.getGroomName());
-                    site.setWelcomeMessage("With the blessings of our parents, we joyously invite you to share in our laughter, sacred ceremonies, and celebrations.");
-                    return websiteRepository.save(site);
-                });
+        Wedding wedding = access.require(weddingId, WeddingModule.WEBSITE).wedding();
+        return loadOrCreateConfig(wedding);
     }
 
     public WeddingWebsite updateWebsiteConfig(Long weddingId, WeddingWebsite updates) {
-        WeddingWebsite existing = getWebsiteConfig(weddingId);
+        Wedding wedding = access.require(weddingId, WeddingModule.WEBSITE).wedding();
+        WeddingWebsite existing = loadOrCreateConfig(wedding);
 
         if (updates.getThemeKey() != null) existing.setThemeKey(updates.getThemeKey());
         if (updates.getWelcomeHeadline() != null) existing.setWelcomeHeadline(updates.getWelcomeHeadline());
@@ -66,8 +61,31 @@ public class WebsiteService {
         return websiteRepository.save(existing);
     }
 
+    private WeddingWebsite loadOrCreateConfig(Wedding wedding) {
+        return websiteRepository.findByWeddingId(wedding.getId())
+                .orElseGet(() -> {
+                    WeddingWebsite site = new WeddingWebsite();
+                    site.setWedding(wedding);
+                    site.setWelcomeHeadline("Celebrating the Sacred Union of " + wedding.getBrideName() + " & " + wedding.getGroomName());
+                    site.setWelcomeMessage("With the blessings of our parents, we joyously invite you to share in our laughter, sacred ceremonies, and celebrations.");
+                    return websiteRepository.save(site);
+                });
+    }
+
+    // ---------------- Public (no login): published sites only, read-only ----------------
+
+    /**
+     * Resolves the wedding that owns an active slug and has a published website.
+     * Unknown slugs and unpublished sites are both a 404, and nothing is created or modified.
+     */
     @Transactional(readOnly = true)
-    public Map<String, Object> getPublicWebsiteBySlug(String slug) {
+    public Wedding requirePublishedWedding(String slug) {
+        return requirePublished(slug).wedding;
+    }
+
+    private record Published(WeddingSlug slug, Wedding wedding, WeddingWebsite site) {}
+
+    private Published requirePublished(String slug) {
         if (slug == null || slug.isBlank()) {
             throw new BadRequestException("slug is required.");
         }
@@ -75,14 +93,20 @@ public class WebsiteService {
         WeddingSlug weddingSlug = slugRepository.findBySlugAndIsActiveTrue(slug.trim())
                 .orElseThrow(() -> new NotFoundException("Wedding website not found for slug: " + slug));
         Wedding wedding = weddingSlug.getWedding();
+        WeddingWebsite site = websiteRepository.findByWeddingId(wedding.getId())
+                .filter(s -> Boolean.TRUE.equals(s.getIsPublished()))
+                .orElseThrow(() -> new NotFoundException("Wedding website not found for slug: " + slug));
+        return new Published(weddingSlug, wedding, site);
+    }
 
-        WeddingWebsite site = getWebsiteConfig(wedding.getId());
-        List<WeddingEvent> events = eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(wedding.getId());
+    @Transactional(readOnly = true)
+    public Map<String, Object> getPublicWebsiteBySlug(String slug) {
+        Published published = requirePublished(slug);
+        Wedding wedding = published.wedding();
+        WeddingWebsite site = published.site();
 
         Map<String, Object> data = new HashMap<>();
-        data.put("slug", weddingSlug.getSlug());
-        // Lets public pages (e.g. guest gallery) scope their calls to this wedding instead of a hardcoded ID
-        data.put("weddingId", wedding.getId());
+        data.put("slug", published.slug().getSlug());
         data.put("brideName", wedding.getBrideName());
         data.put("groomName", wedding.getGroomName());
         data.put("weddingDate", wedding.getWeddingDate());
@@ -96,7 +120,11 @@ public class WebsiteService {
         data.put("showDressCode", site.getShowDressCode());
         data.put("showVenues", site.getShowVenues());
         data.put("showLivestream", site.getShowLivestream());
-        data.put("livestreamUrl", site.getLivestreamUrl());
+        // Only expose sections the organizers chose to show
+        data.put("livestreamUrl", Boolean.TRUE.equals(site.getShowLivestream()) ? site.getLivestreamUrl() : null);
+        List<WeddingEvent> events = Boolean.TRUE.equals(site.getShowSchedule())
+                ? eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(wedding.getId())
+                : List.of();
         data.put("events", events);
 
         return data;

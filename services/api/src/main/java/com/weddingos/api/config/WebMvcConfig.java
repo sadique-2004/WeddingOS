@@ -13,7 +13,8 @@ public class WebMvcConfig implements WebMvcConfigurer {
                 .allowedOriginPatterns("*")
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("*")
-                .allowCredentials(true)
+                // Auth uses the Authorization bearer header, not cookies, so credentialed CORS is not needed.
+                .allowCredentials(false)
                 .maxAge(3600);
     }
 }

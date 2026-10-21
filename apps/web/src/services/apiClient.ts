@@ -27,25 +27,38 @@ function withWedding<T>(weddingId: number | null | undefined, call: (wid: number
   return call(wid)
 }
 
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const url = `${API_BASE_URL}${endpoint}`
+// ---------------- Authentication ----------------
+// The backend trusts only a verified Clerk session token. ClerkAuthBridge (App.tsx) registers
+// Clerk's getToken here; email/user-id headers or localStorage values are never sent as identity.
+type TokenProvider = () => Promise<string | null>
+let authTokenProvider: TokenProvider | null = null
 
-  // Grab active auth user email & clerk id if present in local session
-  let authEmail = ''
-  let authClerkId = ''
+export function setAuthTokenProvider(provider: TokenProvider | null) {
+  authTokenProvider = provider
+}
+
+async function authHeaders(): Promise<Record<string, string>> {
   try {
-    const sessionRaw = localStorage.getItem('weddingos_session_user')
-    if (sessionRaw) {
-      const sess = JSON.parse(sessionRaw)
-      if (sess.email) authEmail = sess.email
-      if (sess.id) authClerkId = sess.id
-    }
-  } catch {}
+    // Fallback to Clerk's global instance in case a call fires before ClerkAuthBridge's effect runs.
+    const clerkSession = typeof window !== 'undefined' ? (window as any).Clerk?.session : null
+    const token = authTokenProvider
+      ? await authTokenProvider()
+      : clerkSession
+        ? await clerkSession.getToken()
+        : null
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  } catch {
+    return {}
+  }
+}
+
+// isPublic: guest endpoints (invite token / website slug) are called without a bearer token.
+async function request<T>(endpoint: string, options: RequestInit = {}, isPublic = false): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...(authEmail ? { 'X-User-Email': authEmail } : {}),
-    ...(authClerkId ? { 'X-Clerk-User-Id': authClerkId } : {}),
+    ...(isPublic ? {} : await authHeaders()),
     ...((options.headers as Record<string, string>) || {}),
   }
 
@@ -103,18 +116,15 @@ export interface WorkspaceSummary {
 }
 
 export const workspaceApi = {
-  getActive: (weddingId?: number, userEmail?: string, clerkUserId?: string, userName?: string) => {
-    const params: string[] = []
-    if (weddingId) params.push(`weddingId=${weddingId}`)
-    if (userEmail) params.push(`userEmail=${encodeURIComponent(userEmail)}`)
-    if (clerkUserId) params.push(`clerkUserId=${encodeURIComponent(clerkUserId)}`)
-    if (userName) params.push(`userName=${encodeURIComponent(userName)}`)
-    const qs = params.length > 0 ? `?${params.join('&')}` : ''
+  // The signed-in user is identified by the bearer token only. The extra parameters are kept for
+  // call-site compatibility and are intentionally not sent.
+  getActive: (weddingId?: number, _userEmail?: string, _clerkUserId?: string, _userName?: string) => {
+    const qs = weddingId ? `?weddingId=${weddingId}` : ''
     return request<WorkspaceSummary>(`/workspaces/active${qs}`)
   },
   getById: (weddingId: number) => request<WorkspaceSummary>(`/workspaces/${weddingId}`),
+  // The owner is always the signed-in user (from the bearer token).
   create: (data: {
-    ownerUserId?: number
     brideName: string
     groomName: string
     weddingDate?: string
@@ -136,8 +146,8 @@ export const workspaceApi = {
     ),
   updateDetails: (
     details: {
-      brideName: string
-      groomName: string
+      brideName?: string
+      groomName?: string
       weddingDate?: string
       city?: string
       venueName?: string
@@ -498,8 +508,70 @@ export const websiteApi = {
         body: JSON.stringify(data),
       })
     ),
-  // Unknown slugs return 404; the response includes the wedding's own weddingId.
-  getPublic: (slug: string) => request<any>(`/public/w/${encodeURIComponent(slug)}`),
+  // Published sites only; unknown or unpublished slugs return 404.
+  getPublic: (slug: string) => request<any>(`/public/w/${encodeURIComponent(slug)}`, {}, true),
+}
+
+// ---------------- Public guest endpoints (no login) ----------------
+export interface PublicInvitation {
+  invitationToken: string
+  displayName: string
+  primaryContactName: string
+  circle: string
+  maxAttendees: number
+  actualAttendees: number
+  rsvpStatus: 'PENDING' | 'ATTENDING' | 'NOT_ATTENDING'
+  dietaryNotes?: string
+  checkedIn: boolean
+  brideName?: string
+  groomName?: string
+  weddingDate?: string
+  city?: string
+  venueName?: string
+}
+
+export interface PublicPhoto {
+  id: number
+  photoUrl: string
+  caption?: string
+  uploaderName: string
+  uploadedAt: string
+  isHighlight: boolean
+  moderationStatus: 'PENDING' | 'APPROVED' | 'REJECTED'
+}
+
+export const publicApi = {
+  getInvitation: (token: string) =>
+    request<PublicInvitation>(`/public/invite/${encodeURIComponent(token)}`, {}, true),
+  submitRsvp: (
+    token: string,
+    payload: { rsvpStatus: 'ATTENDING' | 'NOT_ATTENDING'; actualAttendees?: number; dietaryNotes?: string }
+  ) =>
+    request<PublicInvitation>(
+      `/public/invite/${encodeURIComponent(token)}/rsvp`,
+      { method: 'POST', body: JSON.stringify(payload) },
+      true
+    ),
+  getGallery: (slug: string) =>
+    request<PublicPhoto[]>(`/public/w/${encodeURIComponent(slug)}/gallery`, {}, true),
+  uploadGalleryFile: async (
+    slug: string,
+    file: File,
+    params: { caption?: string; uploaderName?: string } = {}
+  ): Promise<PublicPhoto> => {
+    const formData = new FormData()
+    formData.append('file', file)
+    if (params.caption) formData.append('caption', params.caption)
+    if (params.uploaderName) formData.append('uploaderName', params.uploaderName)
+    const response = await fetch(`${API_BASE_URL}/public/w/${encodeURIComponent(slug)}/gallery/upload-file`, {
+      method: 'POST',
+      body: formData,
+    })
+    if (!response.ok) {
+      throw new Error(`Upload failed: ${response.statusText}`)
+    }
+    return response.json()
+  },
 }
 
 // ---------------- Gallery & Moderation ----------------
@@ -551,6 +623,7 @@ export const galleryApi = {
 
     const response = await fetch(`${API_BASE_URL}/gallery/upload-file`, {
       method: 'POST',
+      headers: await authHeaders(),
       body: formData,
     })
     if (!response.ok) {

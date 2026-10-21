@@ -8,7 +8,6 @@ import { ALL_PERMISSIONS_ENABLED } from '../types/membership'
 import { membersApi, type BackendMembership } from './apiClient'
 import {
   getLocalAuthSession,
-  registerLocalUser,
   updateUserRoleAndPermissions,
 } from './authService'
 
@@ -204,6 +203,7 @@ export function saveMembers(members: WeddingMembership[], weddingId?: number): v
 export interface AssignMemberParams {
   fullName: string
   email: string
+  // Deprecated: passwords are no longer assigned; ignored if provided.
   password?: string
   role: WorkspaceRole
   title?: string
@@ -212,9 +212,9 @@ export interface AssignMemberParams {
 }
 
 /**
- * Assigns a Co-Organizer or Admin with Email and Password credentials.
- * Registers them in authService so they can log in directly at /sign-in,
- * adds them to the active wedding workspace roster, and syncs to backend.
+ * Adds a Co-Organizer or Admin by email to the active wedding and syncs it to the backend.
+ * No password is created or stored: the member signs up / signs in with Clerk using this email,
+ * and the backend links their verified account to this membership on first sign-in.
  */
 export function assignTeamMember(params: AssignMemberParams): WeddingMembership {
   const normalizedEmail = params.email.trim().toLowerCase()
@@ -224,9 +224,6 @@ export function assignTeamMember(params: AssignMemberParams): WeddingMembership 
   if (!params.fullName.trim()) {
     throw new Error('Please enter the team member’s full name.')
   }
-  if (!params.password || params.password.trim().length < 4) {
-    throw new Error('Please provide an access password (at least 4 characters) so they can log in.')
-  }
 
   const wid = params.weddingId ?? getActiveWeddingId()
   const members = getMembers(wid)
@@ -235,16 +232,7 @@ export function assignTeamMember(params: AssignMemberParams): WeddingMembership 
     throw new Error(`A member with email "${normalizedEmail}" is already assigned to this workspace.`)
   }
 
-  // 1. Register their login credentials in authService
-  registerLocalUser(
-    params.fullName.trim(),
-    normalizedEmail,
-    params.password,
-    params.role,
-    params.modulePermissions
-  )
-
-  // 2. Create active membership record
+  // 1. Create active membership record
   const newMember: WeddingMembership = {
     id: `mem-${wid}-${Date.now()}`,
     weddingId: String(wid),
@@ -262,7 +250,7 @@ export function assignTeamMember(params: AssignMemberParams): WeddingMembership 
   const updatedMembers = [...members, newMember]
   saveMembers(updatedMembers, wid)
 
-  // 3. Persist to backend database
+  // 2. Persist to backend database
   membersApi.invite({
     fullName: newMember.fullName,
     email: newMember.email,

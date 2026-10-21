@@ -1,29 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
 import { useAuth } from '@clerk/clerk-react'
-import { getLocalAuthSession } from '../../services/authService'
 
 interface ProtectedRouteProps {
   children: React.ReactNode
 }
 
+// Access requires an active Clerk session. Local/demo sessions in localStorage no longer grant access.
 export default function ProtectedRoute({ children }: ProtectedRouteProps) {
   const { isLoaded, isSignedIn } = useAuth()
   const location = useLocation()
-  const [localUser, setLocalUser] = useState(getLocalAuthSession())
-
-  useEffect(() => {
-    const handleAuthChange = () => {
-      setLocalUser(getLocalAuthSession())
-    }
-    window.addEventListener('weddingos_auth_changed', handleAuthChange)
-    return () => window.removeEventListener('weddingos_auth_changed', handleAuthChange)
-  }, [])
-
-  // If local auth session exists, grant access immediately
-  if (localUser) {
-    return <>{children}</>
-  }
 
   // Waiting for Clerk auth state to initialize
   if (!isLoaded) {
@@ -40,7 +26,7 @@ export default function ProtectedRoute({ children }: ProtectedRouteProps) {
     )
   }
 
-  // If user is not authenticated through Clerk or local session, redirect to sign-in
+  // If user is not authenticated through Clerk, redirect to sign-in
   if (!isSignedIn) {
     const redirectTarget = encodeURIComponent(location.pathname + location.search)
     return <Navigate to={`/sign-in?redirect_url=${redirectTarget}`} replace state={{ from: location }} />

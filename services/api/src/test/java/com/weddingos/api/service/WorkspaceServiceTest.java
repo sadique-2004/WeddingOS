@@ -1,26 +1,41 @@
 package com.weddingos.api.service;
 
 import com.weddingos.api.exception.BadRequestException;
+import com.weddingos.api.exception.ForbiddenException;
 import com.weddingos.api.exception.NotFoundException;
+import com.weddingos.api.model.AppUser;
+import com.weddingos.api.model.Wedding;
+import com.weddingos.api.model.WeddingMembership;
 import com.weddingos.api.repository.*;
+import com.weddingos.api.security.CurrentUserService;
+import com.weddingos.api.security.WeddingAccessService;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.mockito.junit.jupiter.MockitoSettings;
+import org.mockito.quality.Strictness;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
 
 import java.math.BigDecimal;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 /**
- * Unknown or missing wedding IDs must be rejected — never resolved to "the first wedding" or wedding 1.
+ * Workspace operations: no "first wedding" / ID 1 fallbacks, identity only from the verified token,
+ * and wedding access enforced through WeddingAccessService.
  */
 @ExtendWith(MockitoExtension.class)
+@MockitoSettings(strictness = Strictness.LENIENT)
 class WorkspaceServiceTest {
 
     @Mock WeddingRepository weddingRepository;
@@ -36,8 +51,37 @@ class WorkspaceServiceTest {
     @Mock WeddingWebsiteRepository websiteRepository;
     @Mock CheckInLogRepository checkInLogRepository;
     @Mock JdbcTemplate jdbcTemplate;
+    @Mock CurrentUserService currentUserService;
 
-    @InjectMocks WorkspaceService service;
+    WorkspaceService service;
+    AppUser me;
+
+    @BeforeEach
+    void setUp() {
+        WeddingAccessService access = new WeddingAccessService(currentUserService, weddingRepository, membershipRepository);
+        service = new WorkspaceService(weddingRepository, slugRepository, userRepository, membershipRepository,
+                expenseRepository, invitationRepository, eventRepository, taskRepository, vendorRepository,
+                galleryPhotoRepository, websiteRepository, checkInLogRepository, jdbcTemplate, access);
+        me = user(10L);
+        when(currentUserService.requireCurrentUser()).thenReturn(me);
+        when(expenseRepository.sumTotalRecorded(any())).thenReturn(BigDecimal.ZERO);
+        when(expenseRepository.sumTotalPaid(any())).thenReturn(BigDecimal.ZERO);
+        when(expenseRepository.sumTotalAdvancePaid(any())).thenReturn(BigDecimal.ZERO);
+        when(expenseRepository.sumTotalPending(any())).thenReturn(BigDecimal.ZERO);
+    }
+
+    static AppUser user(long id) {
+        AppUser u = new AppUser("user_" + id, "u" + id + "@example.com", "User " + id);
+        u.setId(id);
+        return u;
+    }
+
+    static Wedding wedding(long id, AppUser owner) {
+        Wedding w = new Wedding();
+        w.setId(id);
+        w.setOwnerUser(owner);
+        return w;
+    }
 
     private void assertNoFallbackToOtherWeddings() {
         verify(weddingRepository, never()).findAll();
@@ -64,17 +108,66 @@ class WorkspaceServiceTest {
     }
 
     @Test
-    void activeWorkspaceWithoutUserIdentityIsBadRequestEvenWithWeddingId() {
-        assertThatThrownBy(() -> service.getWorkspaceForUser(null, " ", null, 1L))
-                .isInstanceOf(BadRequestException.class);
-        verifyNoInteractions(weddingRepository, userRepository);
+    void summaryOfAnotherUsersWeddingIsForbidden() {
+        when(weddingRepository.findById(2L)).thenReturn(Optional.of(wedding(2L, user(20L))));
+        when(membershipRepository.findByWeddingIdAndUserId(2L, 10L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.getActiveWorkspaceSummary(2L))
+                .isInstanceOf(ForbiddenException.class);
+    }
+
+    @Test
+    void activeWorkspaceWithoutAuthenticatedUserIsRejected() {
+        when(currentUserService.requireCurrentUser()).thenThrow(new AuthenticationCredentialsNotFoundException("none"));
+
+        assertThatThrownBy(() -> service.getWorkspaceForUser(1L))
+                .isInstanceOf(AuthenticationCredentialsNotFoundException.class);
+        verifyNoInteractions(weddingRepository);
+    }
+
+    @Test
+    void requestedWeddingIdIsIgnoredWhenUserIsNotAMember() {
+        Wedding someoneElses = wedding(2L, user(20L));
+        Wedding mine = wedding(5L, me);
+        when(weddingRepository.findById(2L)).thenReturn(Optional.of(someoneElses));
+        when(membershipRepository.findByWeddingIdAndUserId(2L, 10L)).thenReturn(Optional.empty());
+        when(weddingRepository.findByOwnerUser_Id(10L)).thenReturn(List.of(mine));
+        when(weddingRepository.findById(5L)).thenReturn(Optional.of(mine));
+
+        Map<String, Object> summary = service.getWorkspaceForUser(2L);
+
+        assertThat(summary.get("id")).isEqualTo(5L);
+    }
+
+    @Test
+    void userWithoutWorkspaceGetsTheirOwnNewWeddingAsAdmin() {
+        when(weddingRepository.findByOwnerUser_Id(10L)).thenReturn(List.of());
+        when(membershipRepository.findByUserId(10L)).thenReturn(List.of());
+        when(weddingRepository.save(any())).thenAnswer(inv -> {
+            Wedding w = inv.getArgument(0);
+            w.setId(77L);
+            return w;
+        });
+        when(weddingRepository.findById(77L)).thenAnswer(inv -> Optional.of(wedding(77L, me)));
+
+        Map<String, Object> summary = service.getWorkspaceForUser(null);
+
+        ArgumentCaptor<Wedding> created = ArgumentCaptor.forClass(Wedding.class);
+        verify(weddingRepository).save(created.capture());
+        assertThat(created.getValue().getOwnerUser()).isSameAs(me);
+        ArgumentCaptor<WeddingMembership> membership = ArgumentCaptor.forClass(WeddingMembership.class);
+        verify(membershipRepository).save(membership.capture());
+        assertThat(membership.getValue().getUser()).isSameAs(me);
+        assertThat(membership.getValue().getRole()).isEqualTo(WeddingMembership.Role.ADMIN);
+        assertThat(summary.get("id")).isEqualTo(77L);
+        verify(weddingRepository, never()).findAll();
     }
 
     @Test
     void budgetUpdateWithoutWeddingIdIsBadRequest() {
         assertThatThrownBy(() -> service.updateBudgetTarget(null, BigDecimal.TEN))
                 .isInstanceOf(BadRequestException.class);
-        verifyNoInteractions(weddingRepository);
+        verify(weddingRepository, never()).save(any());
     }
 
     @Test
@@ -97,40 +190,23 @@ class WorkspaceServiceTest {
     }
 
     @Test
-    void detailsUpdateWithoutWeddingIdIsBadRequest() {
-        assertThatThrownBy(() -> service.updateWeddingDetails(null, "A", "B", null, null, null, null))
-                .isInstanceOf(BadRequestException.class);
-        verifyNoInteractions(weddingRepository, slugRepository);
-    }
+    void createWorkspaceOwnerIsAlwaysTheAuthenticatedUser() {
+        when(weddingRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-    @Test
-    void createWorkspaceWithoutOwnerOrIdentityIsBadRequest() {
-        assertThatThrownBy(() -> service.createWorkspace(null, null, null, "A", "B", null, "C", "V", null, null))
-                .isInstanceOf(BadRequestException.class);
-        verify(userRepository, never()).findAll();
+        Wedding created = service.createWorkspace("A", "B", null, "C", "V", null, null);
+
+        assertThat(created.getOwnerUser()).isSameAs(me);
         verify(userRepository, never()).findById(any());
-        verifyNoInteractions(weddingRepository);
+        verify(userRepository, never()).findAll();
     }
 
     @Test
-    void createWorkspaceWithUnknownOwnerIdIsNotFound() {
-        when(userRepository.findById(42L)).thenReturn(Optional.empty());
+    void createWorkspaceWithTakenSlugIsConflict() {
+        when(slugRepository.existsBySlug("taken")).thenReturn(true);
 
-        assertThatThrownBy(() -> service.createWorkspace(42L, null, null, "A", "B", null, "C", "V", null, null))
-                .isInstanceOf(NotFoundException.class);
-        verify(userRepository, never()).findAll();
-        verifyNoInteractions(weddingRepository);
-    }
-
-    @Test
-    void createWorkspaceWithUnknownIdentityIsNotFound() {
-        when(userRepository.findByClerkUserId("clerk_x")).thenReturn(Optional.empty());
-        when(userRepository.findByEmail("someone@example.com")).thenReturn(Optional.empty());
-
-        assertThatThrownBy(() -> service.createWorkspace(null, "Someone@Example.com", "clerk_x", "A", "B", null, "C", "V", null, null))
-                .isInstanceOf(NotFoundException.class);
-        verify(userRepository, never()).findAll();
-        verifyNoInteractions(weddingRepository);
+        assertThatThrownBy(() -> service.createWorkspace("A", "B", null, "C", "V", null, "taken"))
+                .hasMessageContaining("already taken");
+        verify(weddingRepository, never()).save(any());
     }
 
     @Test
@@ -140,7 +216,7 @@ class WorkspaceServiceTest {
         assertThatThrownBy(() -> service.resetWorkspaceData(404L))
                 .isInstanceOf(NotFoundException.class);
         assertNoFallbackToOtherWeddings();
-        verifyNoInteractions(checkInLogRepository, expenseRepository, taskRepository, eventRepository,
-                vendorRepository, invitationRepository, galleryPhotoRepository, membershipRepository);
+        verifyNoInteractions(checkInLogRepository, taskRepository, eventRepository,
+                vendorRepository, invitationRepository, galleryPhotoRepository);
     }
 }

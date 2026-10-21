@@ -1,5 +1,13 @@
 import type { ModulePermissions } from '../types/membership'
 
+/**
+ * Authentication is handled exclusively by Clerk; the backend accepts only verified Clerk
+ * session tokens (see setAuthTokenProvider in apiClient.ts).
+ *
+ * This module no longer creates local accounts, stores passwords, auto-creates ADMIN users or
+ * offers demo logins. `weddingos_session_user` is only a non-authoritative display cache; it grants
+ * no access (ProtectedRoute checks Clerk) and is never sent to the API.
+ */
 export interface LocalAuthUser {
   id: string
   fullName: string
@@ -10,7 +18,8 @@ export interface LocalAuthUser {
 }
 
 const SESSION_STORAGE_KEY = 'weddingos_session_user'
-const REGISTERED_USERS_KEY = 'weddingos_registered_users'
+// Legacy store that held local accounts with base64-encoded passwords; it is deleted on startup.
+const LEGACY_REGISTERED_USERS_KEY = 'weddingos_registered_users'
 
 export function getLocalAuthSession(): LocalAuthUser | null {
   try {
@@ -42,131 +51,33 @@ export function clearLocalAuthSession(): void {
   }
 }
 
-export function getRegisteredUsers(): Array<LocalAuthUser & { passwordHash?: string }> {
+/**
+ * Removes data left by the old local/demo login: the cached local session and the stored
+ * local accounts (which contained base64-encoded passwords).
+ */
+export function clearLegacyLocalAuthData(): void {
   try {
-    const raw = localStorage.getItem(REGISTERED_USERS_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed)) return parsed
+    const hadSession = localStorage.getItem(SESSION_STORAGE_KEY) !== null
+    localStorage.removeItem(LEGACY_REGISTERED_USERS_KEY)
+    localStorage.removeItem(SESSION_STORAGE_KEY)
+    if (hadSession) {
+      window.dispatchEvent(new Event('weddingos_auth_changed'))
     }
   } catch {
     // ignore
   }
-  return []
 }
 
-export function registerLocalUser(
-  fullName: string,
-  email: string,
-  password?: string,
-  role: 'ADMIN' | 'ORGANIZER' = 'ADMIN',
-  permissions?: ModulePermissions | Record<string, boolean>
-): LocalAuthUser {
-  const normalizedEmail = email.trim().toLowerCase()
-  const users = getRegisteredUsers()
-
-  const existingIndex = users.findIndex((u) => u.email.toLowerCase() === normalizedEmail)
-  if (existingIndex >= 0) {
-    const existing = users[existingIndex]
-    existing.fullName = fullName.trim() || existing.fullName
-    existing.role = role
-    if (password) {
-      existing.passwordHash = btoa(password)
-    }
-    if (permissions) {
-      existing.permissions = permissions
-    }
-    users[existingIndex] = existing
-    try {
-      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users))
-    } catch {}
-    return existing
-  }
-
-  const newUser: LocalAuthUser & { passwordHash?: string; permissions?: ModulePermissions | Record<string, boolean> } = {
-    id: `usr_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
-    fullName: fullName.trim() || normalizedEmail.split('@')[0],
-    email: normalizedEmail,
-    role,
-    passwordHash: password ? btoa(password) : undefined,
-    permissions,
-  }
-
-  users.push(newUser)
-  try {
-    localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users))
-  } catch {
-    // ignore
-  }
-
-  return newUser
-}
-
-export function loginLocalUser(email: string, password?: string): LocalAuthUser {
-  const normalizedEmail = email.trim().toLowerCase()
-  const users = getRegisteredUsers()
-  const found = users.find((u) => u.email.toLowerCase() === normalizedEmail)
-
-  if (found) {
-    if (found.passwordHash && password) {
-      if (found.passwordHash !== btoa(password)) {
-        throw new Error('Incorrect password. Please verify the credentials assigned by the Workspace Admin.')
-      }
-    }
-    setLocalAuthSession(found)
-    return found
-  }
-
-  // Auto-provision if first time signing in with credentials as a workspace creator
-  const newUser = registerLocalUser(normalizedEmail.split('@')[0], normalizedEmail, password, 'ADMIN')
-  setLocalAuthSession(newUser)
-  return newUser
-}
-
+/** Updates the display cache when the current user's own role/permissions change in the UI. */
 export function updateUserRoleAndPermissions(
   email: string,
   role: 'ADMIN' | 'ORGANIZER',
   permissions?: ModulePermissions | Record<string, boolean>
 ): void {
-  const normalizedEmail = email.trim().toLowerCase()
-  const users = getRegisteredUsers()
-  const index = users.findIndex((u) => u.email.toLowerCase() === normalizedEmail)
-  if (index >= 0) {
-    users[index].role = role
-    if (permissions) users[index].permissions = permissions
-    try {
-      localStorage.setItem(REGISTERED_USERS_KEY, JSON.stringify(users))
-    } catch {}
-    
-    // Also update active session if current user is this user
-    const current = getLocalAuthSession()
-    if (current && current.email.toLowerCase() === normalizedEmail) {
-      current.role = role
-      if (permissions) current.permissions = permissions
-      setLocalAuthSession(current)
-    }
+  const current = getLocalAuthSession()
+  if (current && current.email.toLowerCase() === email.trim().toLowerCase()) {
+    current.role = role
+    if (permissions) current.permissions = permissions
+    setLocalAuthSession(current)
   }
 }
-
-export function loginDemoUser(as: 'bride' | 'groom' = 'bride'): LocalAuthUser {
-  const demoUser: LocalAuthUser =
-    as === 'bride'
-      ? {
-          id: 'user_bride_admin_demo',
-          fullName: 'Demo Bride',
-          email: 'demo.bride@weddingos.app',
-          role: 'ADMIN',
-          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80',
-        }
-      : {
-          id: 'user_groom_admin_demo',
-          fullName: 'Demo Groom',
-          email: 'demo.groom@weddingos.app',
-          role: 'ADMIN',
-          avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
-        }
-
-  setLocalAuthSession(demoUser)
-  return demoUser
-}
-

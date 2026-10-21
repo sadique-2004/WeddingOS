@@ -9,6 +9,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import com.weddingos.api.security.SecurityConfig;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -16,6 +19,7 @@ import static org.hamcrest.Matchers.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -29,6 +33,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         InvitationController.class,
         TaskController.class
 })
+@Import(SecurityConfig.class)
 class ApiSafetyWebTest {
 
     @Autowired MockMvc mvc;
@@ -37,12 +42,13 @@ class ApiSafetyWebTest {
     @MockBean WebsiteService websiteService;
     @MockBean InvitationService invitationService;
     @MockBean TaskService taskService;
+    @MockBean JwtDecoder jwtDecoder; // authentication is simulated with jwt(); see ClerkJwtSecurityTest for real tokens
 
     // ---- Disabled reset endpoints -------------------------------------------------------
 
     @Test
     void resetByQueryParamIsForbiddenAndDeletesNothing() throws Exception {
-        mvc.perform(post("/api/v1/workspaces/reset").param("weddingId", "1"))
+        mvc.perform(post("/api/v1/workspaces/reset").param("weddingId", "1").with(jwt()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.status").value(403))
                 .andExpect(jsonPath("$.message").value(containsString("disabled")));
@@ -51,14 +57,14 @@ class ApiSafetyWebTest {
 
     @Test
     void resetWithoutParamsIsForbidden() throws Exception {
-        mvc.perform(post("/api/v1/workspaces/reset"))
+        mvc.perform(post("/api/v1/workspaces/reset").with(jwt()))
                 .andExpect(status().isForbidden());
         verify(workspaceService, never()).resetWorkspaceData(any());
     }
 
     @Test
     void resetByPathIdIsForbiddenAndDeletesNothing() throws Exception {
-        mvc.perform(post("/api/v1/workspaces/1/reset"))
+        mvc.perform(post("/api/v1/workspaces/1/reset").with(jwt()))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.message").value(containsString("No data was changed")));
         verify(workspaceService, never()).resetWorkspaceData(any());
@@ -70,7 +76,7 @@ class ApiSafetyWebTest {
     void unknownWorkspaceIdIs404() throws Exception {
         when(workspaceService.getActiveWorkspaceSummary(999L)).thenThrow(new NotFoundException("Wedding not found: 999"));
 
-        mvc.perform(get("/api/v1/workspaces/999"))
+        mvc.perform(get("/api/v1/workspaces/999").with(jwt()))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.error").value("Not Found"))
@@ -82,7 +88,7 @@ class ApiSafetyWebTest {
 
     @Test
     void nonNumericWorkspaceIdIs400() throws Exception {
-        mvc.perform(get("/api/v1/workspaces/abc"))
+        mvc.perform(get("/api/v1/workspaces/abc").with(jwt()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value(containsString("id")));
         verifyNoInteractions(workspaceService);
@@ -90,12 +96,12 @@ class ApiSafetyWebTest {
 
     @Test
     void missingWeddingIdIs400InsteadOfDefaultingToWedding1() throws Exception {
-        mvc.perform(get("/api/v1/tasks"))
+        mvc.perform(get("/api/v1/tasks").with(jwt()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Missing required parameter: weddingId"));
         verifyNoInteractions(taskService);
 
-        mvc.perform(get("/api/v1/website"))
+        mvc.perform(get("/api/v1/website").with(jwt()))
                 .andExpect(status().isBadRequest());
         verify(websiteService, never()).getWebsiteConfig(anyLong());
     }
@@ -103,7 +109,7 @@ class ApiSafetyWebTest {
     @Test
     void budgetUpdateWithoutAmountIs400() throws Exception {
         mvc.perform(put("/api/v1/workspaces/budget").param("weddingId", "5")
-                        .contentType(MediaType.APPLICATION_JSON).content("{}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{}").with(jwt()))
                 .andExpect(status().isBadRequest());
         verify(workspaceService, never()).updateBudgetTarget(any(), any());
     }
@@ -121,7 +127,7 @@ class ApiSafetyWebTest {
 
     @Test
     void invalidInvitationTokenIs404() throws Exception {
-        when(invitationService.getByToken("wos-bad")).thenThrow(new NotFoundException("Invitation not found for the supplied token."));
+        when(invitationService.getPublicInvitation("wos-bad")).thenThrow(new NotFoundException("Invitation not found for the supplied token."));
 
         mvc.perform(get("/api/v1/public/invite/wos-bad"))
                 .andExpect(status().isNotFound())
@@ -141,7 +147,7 @@ class ApiSafetyWebTest {
     @Test
     void malformedJsonIs400() throws Exception {
         mvc.perform(post("/api/v1/tasks").param("weddingId", "5")
-                        .contentType(MediaType.APPLICATION_JSON).content("{not json"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{not json").with(jwt()))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.message").value("Malformed or invalid request body."));
     }
@@ -153,7 +159,7 @@ class ApiSafetyWebTest {
         when(taskService.getTasks(eq(5L), any(), any()))
                 .thenThrow(new RuntimeException("jdbc:mysql://internal-db-host:3306 password=s3cr3t"));
 
-        mvc.perform(get("/api/v1/tasks").param("weddingId", "5"))
+        mvc.perform(get("/api/v1/tasks").param("weddingId", "5").with(jwt()))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.message").value("An unexpected error occurred."))
                 .andExpect(content().string(not(containsString("internal-db-host"))))

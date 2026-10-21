@@ -4,7 +4,8 @@ import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.Expense;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.ExpenseRepository;
-import com.weddingos.api.repository.WeddingRepository;
+import com.weddingos.api.security.WeddingAccessService;
+import com.weddingos.api.security.WeddingModule;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -12,22 +13,23 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.*;
 
+import static com.weddingos.api.security.WeddingAccessService.weddingIdOf;
+
 @Service
 @Transactional
 public class ExpenseService {
 
     private final ExpenseRepository expenseRepository;
-    private final WeddingRepository weddingRepository;
+    private final WeddingAccessService access;
 
-    public ExpenseService(ExpenseRepository expenseRepository, WeddingRepository weddingRepository) {
+    public ExpenseService(ExpenseRepository expenseRepository, WeddingAccessService access) {
         this.expenseRepository = expenseRepository;
-        this.weddingRepository = weddingRepository;
+        this.access = access;
     }
 
     @Transactional(readOnly = true)
     public Map<String, Object> getExpensesWithSummary(Long weddingId) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
+        Wedding wedding = access.require(weddingId, WeddingModule.EXPENSES).wedding();
 
         List<Expense> expenses = expenseRepository.findByWeddingIdOrderByExpenseDateDesc(weddingId);
         BigDecimal totalBudget = wedding.getTotalBudgetTarget();
@@ -74,15 +76,14 @@ public class ExpenseService {
     }
 
     public Expense createExpense(Long weddingId, Expense expense) {
-        Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
+        Wedding wedding = access.require(weddingId, WeddingModule.EXPENSES).wedding();
+        expense.setId(null); // never let a client-supplied ID overwrite an existing row
         expense.setWedding(wedding);
         return expenseRepository.save(expense);
     }
 
     public Expense updateExpense(Long id, Expense updates) {
-        Expense existing = expenseRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Expense not found: " + id));
+        Expense existing = loadAuthorized(id);
 
         if (updates.getTitle() != null) existing.setTitle(updates.getTitle());
         if (updates.getCategory() != null) existing.setCategory(updates.getCategory());
@@ -96,6 +97,14 @@ public class ExpenseService {
     }
 
     public void deleteExpense(Long id) {
-        expenseRepository.deleteById(id);
+        expenseRepository.delete(loadAuthorized(id));
+    }
+
+    /** Loads an expense and checks EXPENSES permission on the wedding that owns it. */
+    private Expense loadAuthorized(Long id) {
+        Expense expense = expenseRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Expense not found: " + id));
+        access.require(weddingIdOf(expense.getWedding()), WeddingModule.EXPENSES);
+        return expense;
     }
 }

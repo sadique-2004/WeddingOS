@@ -16,7 +16,7 @@ import {
   ArrowLeft,
   Image as ImageIcon
 } from 'lucide-react'
-import { galleryApi, websiteApi } from '../../services/apiClient'
+import { publicApi, websiteApi } from '../../services/apiClient'
 
 export interface GalleryPhoto {
   id: string
@@ -126,28 +126,27 @@ export default function PublicGalleryPage() {
     }
   }, [storageKey])
 
-  // Wedding resolved from the URL slug; null until resolved (or when the slug is unknown)
-  const [publicWeddingId, setPublicWeddingId] = useState<number | null>(null)
+  // True once the URL slug resolved to a published wedding (unknown/unpublished slugs stay false)
+  const [isPublishedGallery, setIsPublishedGallery] = useState(false)
 
-  // Fetch approved photos and couple details from backend
+  // Fetch approved photos and couple details from backend (public, slug-scoped endpoints; no login)
   useEffect(() => {
     if (!slug) return
 
-    // 1. Resolve the wedding from the public slug (unknown slug => 404, never another wedding)
+    // 1. Resolve the published wedding from the public slug (unknown slug => 404, never another wedding)
     websiteApi.getPublic(slug).then((publicData: any) => {
-      const wid = Number(publicData?.weddingId)
-      if (!Number.isInteger(wid) || wid <= 0) return
-      setPublicWeddingId(wid)
+      if (!publicData) return
+      setIsPublishedGallery(true)
       setWedding((prev: any) => ({
         ...prev,
-        id: wid,
+        id: `pub-${slug}`,
         brideName: publicData.brideName || prev.brideName,
         groomName: publicData.groomName || prev.groomName,
         city: publicData.venueName || publicData.city || prev.city,
       }))
 
-      // 2. Fetch approved Cloudinary photos for that wedding only
-      return galleryApi.getAll(wid).then((backendPhotos) => {
+      // 2. Fetch approved photos for that wedding only
+      return publicApi.getGallery(slug).then((backendPhotos) => {
         if (Array.isArray(backendPhotos) && backendPhotos.length > 0) {
           const mapped: GalleryPhoto[] = backendPhotos.map((p: any) => ({
             id: `photo-db-${p.id}`,
@@ -213,13 +212,11 @@ export default function PublicGalleryPage() {
     let finalUrl = previewUrl || ''
     if (selectedRawFile) {
       try {
-        if (!publicWeddingId) {
-          throw new Error('This gallery link does not match a known wedding.')
+        if (!slug || !isPublishedGallery) {
+          throw new Error('This gallery link does not match a published wedding.')
         }
-        const backendPhoto = await galleryApi.uploadFile(selectedRawFile, {
-          weddingId: publicWeddingId,
+        const backendPhoto = await publicApi.uploadGalleryFile(slug, selectedRawFile, {
           caption: caption.trim(),
-          ceremonyTag: ceremony,
           uploaderName: uploaderName.trim() || 'Wedding Guest',
         })
         if (backendPhoto?.photoUrl) {
