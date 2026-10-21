@@ -75,17 +75,26 @@ public class WorkspaceService {
         }
     }
 
+    private AppUser getOrCreateDefaultOwner() {
+        return userRepository.findAll().stream().findFirst().orElseGet(() -> {
+            AppUser defaultAdmin = new AppUser("admin_default", "admin@weddingos.app", "Workspace Admin");
+            return userRepository.save(defaultAdmin);
+        });
+    }
+
     @Transactional
     public Map<String, Object> getActiveWorkspaceSummary(Long weddingId) {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
+                    w.setOwnerUser(getOrCreateDefaultOwner());
                     w.setBrideName("");
                     w.setGroomName("");
                     w.setWeddingDate(null);
                     w.setCity("");
                     w.setVenueName("");
                     w.setTotalBudgetTarget(BigDecimal.ZERO);
+                    w.setExpectedGuestCapacity(0);
                     Wedding savedW = weddingRepository.save(w);
 
                     WeddingSlug ws = new WeddingSlug();
@@ -114,6 +123,7 @@ public class WorkspaceService {
         Map<String, Object> summary = new HashMap<>();
         summary.put("id", wedding.getId());
         summary.put("brideName", wedding.getBrideName() != null ? wedding.getBrideName() : "");
+        summary.put("groomName", wedding.getGroomName() != null ? wedding.getGroomName() : "");
         LocalDate date = wedding.getWeddingDate();
         if (date != null && date.getYear() == 2099) {
             date = null;
@@ -145,12 +155,14 @@ public class WorkspaceService {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
+                    w.setOwnerUser(getOrCreateDefaultOwner());
                     w.setBrideName(brideName != null ? brideName : "");
                     w.setGroomName(groomName != null ? groomName : "");
                     w.setWeddingDate(weddingDate);
                     w.setCity(city != null ? city : "");
                     w.setVenueName(venueName != null ? venueName : "");
                     w.setTotalBudgetTarget(BigDecimal.ZERO);
+                    w.setExpectedGuestCapacity(0);
                     return weddingRepository.save(w);
                 }));
 
@@ -218,11 +230,13 @@ public class WorkspaceService {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
+                    w.setOwnerUser(getOrCreateDefaultOwner());
                     w.setBrideName("");
                     w.setGroomName("");
                     w.setCity("");
                     w.setVenueName("");
                     w.setTotalBudgetTarget(BigDecimal.ZERO);
+                    w.setExpectedGuestCapacity(0);
                     return weddingRepository.save(w);
                 }));
 

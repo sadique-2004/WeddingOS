@@ -14,7 +14,7 @@ public class Wedding {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "owner_user_id", nullable = false)
+    @JoinColumn(name = "owner_user_id", nullable = true)
     private AppUser ownerUser;
 
     @Column(name = "bride_name", length = 120)
@@ -33,10 +33,10 @@ public class Wedding {
     private String venueName;
 
     @Column(name = "total_budget_target", nullable = false, precision = 12, scale = 2)
-    private BigDecimal totalBudgetTarget = new BigDecimal("2500000.00");
+    private BigDecimal totalBudgetTarget = BigDecimal.ZERO;
 
     @Column(name = "expected_guest_capacity", nullable = false)
-    private Integer expectedGuestCapacity = 350;
+    private Integer expectedGuestCapacity = 0;
 
     @Column(name = "currency_code", nullable = false, length = 3)
     private String currencyCode = "INR";
