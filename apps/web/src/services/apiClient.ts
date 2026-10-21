@@ -1,11 +1,26 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
-    ? 'https://weddingos-api.onrender.com/api/v1'
-    : 'http://localhost:8080/api/v1')
+function getBaseUrl(): string {
+  if (import.meta.env.VITE_API_URL) {
+    return import.meta.env.VITE_API_URL
+  }
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname
+    if (
+      host === 'localhost' ||
+      host === '127.0.0.1' ||
+      host.startsWith('192.168.') ||
+      host.startsWith('10.') ||
+      host.endsWith('.local')
+    ) {
+      return `http://${host}:8080/api/v1`
+    }
+    return 'https://weddingos-api.onrender.com/api/v1'
+  }
+  return 'http://localhost:8080/api/v1'
+}
 
-// Returns the active wedding ID, or 0 when none is selected.
-// Never falls back to wedding 1: 0 makes API calls fail instead of reading another wedding's data.
+const API_BASE_URL = getBaseUrl()
+
+// Returns the active wedding ID, or 1 in local development / fallback when none is selected.
 export function getActiveWeddingId(): number {
   try {
     const raw = localStorage.getItem('weddingos_active_wedding')
@@ -15,14 +30,45 @@ export function getActiveWeddingId(): number {
       if (Number.isInteger(id) && id > 0) return id
     }
   } catch {}
+  if (
+    import.meta.env.DEV ||
+    (typeof window !== 'undefined' &&
+      (window.location.hostname === 'localhost' ||
+        window.location.hostname.startsWith('192.168.') ||
+        window.location.hostname.startsWith('10.')))
+  ) {
+    return 1
+  }
   return 0
 }
 
-// Resolves an explicit or active wedding ID and runs the call; rejects when no wedding is selected.
-function withWedding<T>(weddingId: number | null | undefined, call: (wid: number) => Promise<T>): Promise<T> {
-  const wid = weddingId || getActiveWeddingId()
+// Resolves an explicit or active wedding ID and runs the call; auto-resolves from /workspaces/active if needed.
+async function withWedding<T>(weddingId: number | null | undefined, call: (wid: number) => Promise<T>): Promise<T> {
+  let wid = weddingId || getActiveWeddingId()
   if (!Number.isInteger(wid) || wid <= 0) {
-    return Promise.reject(new Error('No active wedding workspace is selected.'))
+    try {
+      const active = await workspaceApi.getActive()
+      if (active && Number.isInteger(active.id) && active.id > 0) {
+        wid = active.id
+        try {
+          localStorage.setItem('weddingos_active_wedding', JSON.stringify(active))
+          window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+        } catch {}
+      }
+    } catch {}
+  }
+  if (!Number.isInteger(wid) || wid <= 0) {
+    if (
+      import.meta.env.DEV ||
+      (typeof window !== 'undefined' &&
+        (window.location.hostname === 'localhost' ||
+          window.location.hostname.startsWith('192.168.') ||
+          window.location.hostname.startsWith('10.')))
+    ) {
+      wid = 1
+    } else {
+      return Promise.reject(new Error('No active wedding workspace is selected.'))
+    }
   }
   return call(wid)
 }
@@ -188,6 +234,7 @@ export interface BackendWeddingEvent {
   description?: string
   attendeeEstimate?: number
   imageUrl?: string
+  coverImageUrl?: string
   sequenceOrder?: number
 }
 

@@ -16,7 +16,7 @@ import {
   Info,
   Users,
 } from 'lucide-react'
-import { eventsApi } from '../../services/apiClient'
+import { eventsApi, getActiveWeddingId } from '../../services/apiClient'
 
 export interface WeddingEvent {
   id: string
@@ -37,25 +37,12 @@ export interface WeddingEvent {
 
 const INITIAL_EVENTS: WeddingEvent[] = []
 
-
 export default function EventsPage() {
-  const getActiveWeddingId = (): number => {
-    // 0 = no active wedding (never fall back to wedding 1)
-    try {
-      const stored = localStorage.getItem('weddingos_active_wedding')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        return Number(parsed.id) || 0
-      }
-    } catch {
-      // ignore
-    }
-    return 0
-  }
-
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
   const [events, setEvents] = useState<WeddingEvent[]>([])
   const [loading, setLoading] = useState<boolean>(true)
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
   const [filterDay, setFilterDay] = useState<string>('all')
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingEvent, setEditingEvent] = useState<WeddingEvent | null>(null)
@@ -80,14 +67,14 @@ export default function EventsPage() {
             mapUrl: be.mapUrl || '',
             description: be.description || '',
             attendeeEstimate: be.attendeeEstimate || 100,
-            imageUrl: be.imageUrl || '',
+            imageUrl: be.imageUrl || be.coverImageUrl || '',
           }))
         )
       } else {
         setEvents([])
       }
     } catch (err) {
-      console.warn('Backend events fetch error/offline, using fallback:', err)
+      console.warn('Backend events fetch error/offline:', err)
       setEvents([])
     } finally {
       setLoading(false)
@@ -149,6 +136,7 @@ export default function EventsPage() {
 
   const openAddModal = () => {
     setEditingEvent(null)
+    setSaveError(null)
     setFormData({
       name: '',
       eventType: 'other',
@@ -169,6 +157,7 @@ export default function EventsPage() {
 
   const openEditModal = (evt: WeddingEvent) => {
     setEditingEvent(evt)
+    setSaveError(null)
     setFormData({
       name: evt.name,
       eventType: evt.eventType,
@@ -191,14 +180,21 @@ export default function EventsPage() {
     if (confirm(`Are you sure you want to remove "${name}" from your itinerary?`)) {
       const numId = Number(id)
       if (!isNaN(numId)) {
-        await eventsApi.delete(numId).catch((err) => console.warn('Backend delete failed:', err))
+        try {
+          await eventsApi.delete(numId)
+          await loadEvents(weddingId || getActiveWeddingId())
+        } catch (err) {
+          console.error('Backend delete failed:', err)
+          alert('Could not delete ceremony from database. Please check your connection.')
+        }
       }
-      setEvents((prev) => prev.filter((e) => e.id !== id))
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setIsSaving(true)
+    setSaveError(null)
 
     const payload = {
       name: formData.name,
@@ -214,31 +210,28 @@ export default function EventsPage() {
       description: formData.description,
       attendeeEstimate: formData.attendeeEstimate,
       imageUrl: formData.imageUrl,
+      coverImageUrl: formData.imageUrl,
     }
 
-    if (editingEvent) {
-      const numId = Number(editingEvent.id)
-      if (!isNaN(numId)) {
-        await eventsApi.update(numId, payload).catch((err) => console.warn('Backend update failed:', err))
+    try {
+      const currentWid = weddingId || getActiveWeddingId()
+      if (editingEvent) {
+        const numId = Number(editingEvent.id)
+        if (!isNaN(numId)) {
+          await eventsApi.update(numId, payload)
+        }
+      } else {
+        await eventsApi.create(payload, currentWid)
       }
-      setEvents((prev) =>
-        prev.map((evt) => (evt.id === editingEvent.id ? { ...evt, ...formData } : evt))
-      )
-    } else {
-      let createdId = `evt-${Date.now()}`
-      try {
-        const saved = await eventsApi.create(payload, weddingId)
-        if (saved?.id) createdId = String(saved.id)
-      } catch (err) {
-        console.warn('Backend event create offline:', err)
-      }
-      const newEvent: WeddingEvent = {
-        id: createdId,
-        ...formData,
-      }
-      setEvents((prev) => [...prev, newEvent])
+      // Re-fetch clean list directly from the database
+      await loadEvents(currentWid)
+      setIsModalOpen(false)
+    } catch (err: any) {
+      console.error('Failed saving event to database:', err)
+      setSaveError(err?.message || 'Failed to save ceremony to the database. Please verify connection.')
+    } finally {
+      setIsSaving(false)
     }
-    setIsModalOpen(false)
   }
 
   const filteredEvents =
@@ -752,20 +745,29 @@ export default function EventsPage() {
                 </div>
               </div>
 
+              {/* Error Notice */}
+              {saveError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs leading-relaxed">
+                  <strong>Save Failed:</strong> {saveError}
+                </div>
+              )}
+
               {/* Modal Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-4 border-t border-neutral-100">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer"
+                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] disabled:opacity-60 text-white text-xs font-semibold shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {editingEvent ? 'Save Changes' : 'Create Ceremony'}
+                  {isSaving ? 'Saving to Database...' : editingEvent ? 'Save Changes' : 'Create Ceremony'}
                 </button>
               </div>
 
