@@ -145,131 +145,8 @@ const CATEGORY_META: Record<
   },
 }
 
-const INITIAL_VENDORS: VendorContact[] = [
-  {
-    id: 'ven-1',
-    name: 'The Oberoi Udaivilas',
-    category: 'Venue & Banquets',
-    contactPerson: 'Suryaveer Singh Rathore',
-    contactRole: 'Director of Palace Hospitality',
-    phoneNumber: '+91 98290 12845',
-    email: 'events.udaivilas@oberoihotels.com',
-    address: 'Haridas Ji Ki Magri, Lake Pichola, Udaipur, Rajasthan 313001',
-    websiteUrl: 'https://www.oberoihotels.com/hotels-in-udaipur-udaivilas/',
-    agreedCost: 1450000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'All Ceremonies',
-    notes: 'Includes lakeside mandap lawn, 85 luxury suites buyout, breakfast banquets, and boat jetty security clearance.',
-  },
-  {
-    id: 'ven-2',
-    name: 'Ferns & Petals Royal Production',
-    category: 'Decor & Production',
-    contactPerson: 'Karan Mehra',
-    contactRole: 'Lead Scenographer & Floral Designer',
-    phoneNumber: '+91 98114 77201',
-    email: 'karan.production@fnp.com',
-    address: 'MG Road, South Delhi / Udaipur Hub',
-    websiteUrl: 'https://www.fnp.com',
-    agreedCost: 420000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'Baraat & Pheras',
-    notes: 'Exotic tuberose garlands, 500 hand-hammered brass oil lamps, floating water lily mandap, and mirror walkway.',
-  },
-  {
-    id: 'ven-3',
-    name: 'Sabyasachi Mukherjee Atelier',
-    category: 'Bridal & Styling',
-    contactPerson: 'Shalini Sengupta',
-    contactRole: 'Senior Bridal Couturier',
-    phoneNumber: '+91 98300 45210',
-    email: 'bridal.concierge@sabyasachi.com',
-    address: 'Kolkata Headquarters & New Delhi Flagship, One Style Mile',
-    websiteUrl: 'https://www.sabyasachi.com',
-    agreedCost: 380000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'Baraat & Pheras',
-    notes: 'Hand-embroidered zardozi heritage bridal lehenga with custom dupatta monogram, trial on Nov 10.',
-  },
-  {
-    id: 'ven-4',
-    name: 'Dhruva Live Acoustic Symphony',
-    category: 'Music & Entertainment',
-    contactPerson: 'Ustad Aftab Khan',
-    contactRole: 'Bandleader & Sufi Vocalist',
-    phoneNumber: '+91 98205 33411',
-    email: 'bookings@dhruvalive.in',
-    address: 'Bandra West, Mumbai, Maharashtra',
-    agreedCost: 275000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'Sangeet & Cocktail',
-    notes: '7-piece ensemble with harmonium, tabla, acoustic violin, and 12-minute family dance medley medley mix.',
-  },
-  {
-    id: 'ven-5',
-    name: 'Stories by Joseph Radhik Studios',
-    category: 'Photography & Cinema',
-    contactPerson: 'Joseph & Devika',
-    contactRole: 'Chief Cinematographers',
-    phoneNumber: '+91 98211 99014',
-    email: 'weddings@josephradhik.com',
-    address: 'Mumbai & Hyderabad',
-    websiteUrl: 'https://www.storiesbyjosephradhik.com',
-    agreedCost: 350000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'All Ceremonies',
-    notes: 'Dual 4K drone cameras, candid photography crew, 3-minute same-day edit reel for reception screen.',
-  },
-  {
-    id: 'ven-6',
-    name: 'Udaipur Heritage Vintage Car Fleet',
-    category: 'Logistics & Transport',
-    contactPerson: 'Mahavir Bhati',
-    contactRole: 'Fleet Operations Manager',
-    phoneNumber: '+91 94141 88320',
-    email: 'royalvintagecars@udaipurheritage.com',
-    address: 'City Palace Complex, Udaipur, Rajasthan',
-    agreedCost: 100000,
-    currencyCode: 'INR',
-    contractStatus: 'IN_DISCUSSION',
-    relatedCeremony: 'Baraat & Pheras',
-    notes: '1948 Rolls Royce Silver Wraith for groom royal entrance + 4 decorated lake launches.',
-  },
-  {
-    id: 'ven-7',
-    name: 'Jodhpur Royal Sweets & Handicrafts',
-    category: 'Invitations & Gifting',
-    contactPerson: 'Poonam Chand Gehlot',
-    contactRole: 'Master Confectioner',
-    phoneNumber: '+91 98292 66710',
-    email: 'gifting@jodhpursweets.in',
-    address: 'Clock Tower Market, Jodhpur, Rajasthan',
-    agreedCost: 110000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'All Ceremonies',
-    notes: '140 hand-carved brass hampers with saffron dry fruits, Ghewar, and ceremonial invite scroll.',
-  },
-  {
-    id: 'ven-8',
-    name: 'Pandit Vidyadhar Shastri & Vedic Troupe',
-    category: 'Priests & Ceremonial',
-    contactPerson: 'Acharya Vidyadhar Shastri',
-    contactRole: 'Head Vedic Acharya',
-    phoneNumber: '+91 94133 21900',
-    address: 'Jagdish Temple Lane, Udaipur',
-    agreedCost: 45000,
-    currencyCode: 'INR',
-    contractStatus: 'CONFIRMED',
-    relatedCeremony: 'Baraat & Pheras',
-    notes: 'Authentic Sanatan Vivah Vidhi recitation with explanation in Hindi & English for international guests.',
-  },
-]
+const INITIAL_VENDORS: VendorContact[] = []
+
 
 export default function VendorsPage() {
   const getActiveWeddingId = (): number => {
@@ -327,13 +204,8 @@ export default function VendorsPage() {
       } catch {}
     }
 
-    if (wid === 1) {
-      setVendors(INITIAL_VENDORS)
-      localStorage.setItem(storageKey, JSON.stringify(INITIAL_VENDORS))
-    } else {
-      setVendors([])
-      localStorage.setItem(storageKey, JSON.stringify([]))
-    }
+    setVendors([])
+    localStorage.setItem(storageKey, JSON.stringify([]))
   }
 
   useEffect(() => {

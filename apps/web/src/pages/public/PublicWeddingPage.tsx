@@ -20,21 +20,21 @@ import { websiteApi, workspacesApi } from '../../services/apiClient'
 export type { PublicWebsiteConfig } from '../../types/website'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
-  slug: 'aisha-and-imran',
+  slug: 'my-wedding',
   themeKey: 'CLASSIC_INDIAN',
-  brideName: 'Aisha',
-  groomName: 'Imran',
-  weddingDate: '2027-02-18',
-  locationName: 'The Oberoi Udaivilas, Udaipur',
+  brideName: '',
+  groomName: '',
+  weddingDate: '',
+  locationName: '',
   welcomeHeadline: 'Together with our families, we invite you to celebrate our union',
   welcomeMessage:
-    'Two hearts, two lineages, and seven eternal vows under the Mewari skies. We are blessed to have you witness our journey of love, friendship, and sacred ceremonies.',
+    'With the blessings of our elders and loved ones, we joyfully invite you to celebrate our union.',
   isPublished: true,
   showSchedule: true,
   showDressCode: true,
   showVenues: true,
-  showLivestream: true,
-  livestreamUrl: 'https://youtube.com/live/royal-wedding-stream',
+  showLivestream: false,
+  livestreamUrl: '',
   coverPhoto: '/events/pheras.jpg',
 }
 

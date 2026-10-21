@@ -20,19 +20,37 @@ public class WorkspaceService {
     private final WeddingMembershipRepository membershipRepository;
     private final ExpenseRepository expenseRepository;
     private final FamilyInvitationRepository invitationRepository;
+    private final WeddingEventRepository eventRepository;
+    private final PreparationTaskRepository taskRepository;
+    private final VendorContactRepository vendorRepository;
+    private final GalleryPhotoRepository galleryPhotoRepository;
+    private final WeddingWebsiteRepository websiteRepository;
+    private final CheckInLogRepository checkInLogRepository;
 
     public WorkspaceService(WeddingRepository weddingRepository,
                             WeddingSlugRepository slugRepository,
                             AppUserRepository userRepository,
                             WeddingMembershipRepository membershipRepository,
                             ExpenseRepository expenseRepository,
-                            FamilyInvitationRepository invitationRepository) {
+                            FamilyInvitationRepository invitationRepository,
+                            WeddingEventRepository eventRepository,
+                            PreparationTaskRepository taskRepository,
+                            VendorContactRepository vendorRepository,
+                            GalleryPhotoRepository galleryPhotoRepository,
+                            WeddingWebsiteRepository websiteRepository,
+                            CheckInLogRepository checkInLogRepository) {
         this.weddingRepository = weddingRepository;
         this.slugRepository = slugRepository;
         this.userRepository = userRepository;
         this.membershipRepository = membershipRepository;
         this.expenseRepository = expenseRepository;
         this.invitationRepository = invitationRepository;
+        this.eventRepository = eventRepository;
+        this.taskRepository = taskRepository;
+        this.vendorRepository = vendorRepository;
+        this.galleryPhotoRepository = galleryPhotoRepository;
+        this.websiteRepository = websiteRepository;
+        this.checkInLogRepository = checkInLogRepository;
     }
 
     @Transactional
@@ -40,17 +58,17 @@ public class WorkspaceService {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
-                    w.setBrideName("Aisha");
-                    w.setGroomName("Imran");
-                    w.setWeddingDate(LocalDate.now().plusMonths(4));
-                    w.setCity("Udaipur, Rajasthan");
-                    w.setVenueName("The Oberoi Udaivilas");
-                    w.setTotalBudgetTarget(new BigDecimal("2500000.00"));
+                    w.setBrideName("");
+                    w.setGroomName("");
+                    w.setWeddingDate(null);
+                    w.setCity("");
+                    w.setVenueName("");
+                    w.setTotalBudgetTarget(BigDecimal.ZERO);
                     Wedding savedW = weddingRepository.save(w);
 
                     WeddingSlug ws = new WeddingSlug();
                     ws.setWedding(savedW);
-                    ws.setSlug("aisha-and-imran");
+                    ws.setSlug("wedding-" + savedW.getId());
                     ws.setIsActive(true);
                     slugRepository.save(ws);
 
@@ -60,9 +78,9 @@ public class WorkspaceService {
         Long activeId = wedding.getId();
         String slug = slugRepository.findByWeddingId(activeId)
                 .map(WeddingSlug::getSlug)
-                .orElse("aisha-and-imran");
+                .orElse("wedding-" + activeId);
 
-        BigDecimal totalBudget = wedding.getTotalBudgetTarget() != null ? wedding.getTotalBudgetTarget() : new BigDecimal("2500000.00");
+        BigDecimal totalBudget = wedding.getTotalBudgetTarget() != null ? wedding.getTotalBudgetTarget() : BigDecimal.ZERO;
         BigDecimal totalSpent = expenseRepository.sumTotalRecorded(activeId);
         BigDecimal totalPaid = expenseRepository.sumTotalPaid(activeId);
         BigDecimal totalAdvancePaid = expenseRepository.sumTotalAdvancePaid(activeId);
@@ -73,18 +91,18 @@ public class WorkspaceService {
 
         Map<String, Object> summary = new HashMap<>();
         summary.put("id", wedding.getId());
-        summary.put("brideName", wedding.getBrideName());
-        summary.put("groomName", wedding.getGroomName());
+        summary.put("brideName", wedding.getBrideName() != null ? wedding.getBrideName() : "");
+        summary.put("groomName", wedding.getGroomName() != null ? wedding.getGroomName() : "");
         summary.put("weddingDate", wedding.getWeddingDate());
-        summary.put("city", wedding.getCity());
-        summary.put("venueName", wedding.getVenueName());
+        summary.put("city", wedding.getCity() != null ? wedding.getCity() : "");
+        summary.put("venueName", wedding.getVenueName() != null ? wedding.getVenueName() : "");
         summary.put("slug", slug);
         summary.put("totalBudgetTarget", totalBudget);
         summary.put("totalRecordedSpending", totalSpent != null ? totalSpent : BigDecimal.ZERO);
         summary.put("totalPaid", (totalPaid != null ? totalPaid : BigDecimal.ZERO).add(totalAdvancePaid != null ? totalAdvancePaid : BigDecimal.ZERO));
         summary.put("totalPendingDues", totalPendingDues != null ? totalPendingDues : BigDecimal.ZERO);
         summary.put("remainingRunway", remainingBudget);
-        summary.put("expectedGuestCapacity", wedding.getExpectedGuestCapacity());
+        summary.put("expectedGuestCapacity", wedding.getExpectedGuestCapacity() != null ? wedding.getExpectedGuestCapacity() : 0);
         summary.put("totalInvitationsCount", totalInvitations);
         summary.put("currencyCode", wedding.getCurrencyCode() != null ? wedding.getCurrencyCode() : "INR");
 
@@ -102,17 +120,17 @@ public class WorkspaceService {
         Wedding wedding = weddingRepository.findById(weddingId)
                 .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                     Wedding w = new Wedding();
-                    w.setBrideName(brideName != null ? brideName : "Aisha");
-                    w.setGroomName(groomName != null ? groomName : "Imran");
-                    w.setWeddingDate(weddingDate != null ? weddingDate : LocalDate.now().plusMonths(4));
-                    w.setCity(city != null ? city : "Udaipur, Rajasthan");
-                    w.setVenueName(venueName != null ? venueName : "The Oberoi Udaivilas");
-                    w.setTotalBudgetTarget(new BigDecimal("2500000.00"));
+                    w.setBrideName(brideName != null ? brideName : "");
+                    w.setGroomName(groomName != null ? groomName : "");
+                    w.setWeddingDate(weddingDate);
+                    w.setCity(city != null ? city : "");
+                    w.setVenueName(venueName != null ? venueName : "");
+                    w.setTotalBudgetTarget(BigDecimal.ZERO);
                     return weddingRepository.save(w);
                 }));
 
-        if (brideName != null && !brideName.trim().isEmpty()) wedding.setBrideName(brideName.trim());
-        if (groomName != null && !groomName.trim().isEmpty()) wedding.setGroomName(groomName.trim());
+        if (brideName != null) wedding.setBrideName(brideName.trim());
+        if (groomName != null) wedding.setGroomName(groomName.trim());
         if (weddingDate != null) wedding.setWeddingDate(weddingDate);
         if (city != null) wedding.setCity(city.trim());
         if (venueName != null) wedding.setVenueName(venueName.trim());
@@ -143,12 +161,12 @@ public class WorkspaceService {
 
         Wedding wedding = new Wedding();
         wedding.setOwnerUser(owner);
-        wedding.setBrideName(brideName != null ? brideName : "Aisha");
-        wedding.setGroomName(groomName != null ? groomName : "Imran");
-        wedding.setWeddingDate(weddingDate != null ? weddingDate : LocalDate.now().plusMonths(6));
-        wedding.setCity(city != null ? city : "Udaipur, Rajasthan");
-        wedding.setVenueName(venueName != null ? venueName : "The Royal Palace");
-        if (totalBudget != null) wedding.setTotalBudgetTarget(totalBudget);
+        wedding.setBrideName(brideName != null ? brideName : "");
+        wedding.setGroomName(groomName != null ? groomName : "");
+        wedding.setWeddingDate(weddingDate);
+        wedding.setCity(city != null ? city : "");
+        wedding.setVenueName(venueName != null ? venueName : "");
+        wedding.setTotalBudgetTarget(totalBudget != null ? totalBudget : BigDecimal.ZERO);
         Wedding saved = weddingRepository.save(wedding);
 
         if (slug != null && !slug.isBlank()) {
@@ -168,5 +186,75 @@ public class WorkspaceService {
         membershipRepository.save(membership);
 
         return saved;
+    }
+
+    @Transactional
+    public Map<String, Object> resetWorkspaceData(Long weddingId) {
+        Wedding wedding = weddingRepository.findById(weddingId)
+                .orElseGet(() -> weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
+                    Wedding w = new Wedding();
+                    w.setBrideName("");
+                    w.setGroomName("");
+                    w.setCity("");
+                    w.setVenueName("");
+                    w.setTotalBudgetTarget(BigDecimal.ZERO);
+                    return weddingRepository.save(w);
+                }));
+
+        Long activeId = wedding.getId();
+
+        // 1. Delete all related events
+        var events = eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(activeId);
+        eventRepository.deleteAll(events);
+
+        // 2. Delete all tasks
+        var tasks = taskRepository.findByWeddingIdOrderByCreatedAtDesc(activeId);
+        taskRepository.deleteAll(tasks);
+
+        // 3. Delete all expenses
+        var expenses = expenseRepository.findByWeddingIdOrderByExpenseDateDesc(activeId);
+        expenseRepository.deleteAll(expenses);
+
+        // 4. Delete all vendors
+        var vendors = vendorRepository.findByWeddingIdOrderByBusinessNameAsc(activeId);
+        vendorRepository.deleteAll(vendors);
+
+        // 5. Delete all check-in logs
+        var logs = checkInLogRepository.findByWeddingIdOrderByScannedAtDesc(activeId);
+        checkInLogRepository.deleteAll(logs);
+
+        // 6. Delete all invitations
+        var invitations = invitationRepository.findByWeddingIdOrderByDisplayNameAsc(activeId);
+        invitationRepository.deleteAll(invitations);
+
+        // 7. Delete all gallery photos
+        var photos = galleryPhotoRepository.findByWeddingIdOrderByUploadedAtDesc(activeId);
+        galleryPhotoRepository.deleteAll(photos);
+
+        // 8. Reset website config
+        websiteRepository.findByWeddingId(activeId).ifPresent(site -> {
+            site.setWelcomeHeadline("");
+            site.setWelcomeMessage("");
+            site.setIsPublished(false);
+            websiteRepository.save(site);
+        });
+
+        // 9. Reset wedding couple details
+        wedding.setBrideName("");
+        wedding.setGroomName("");
+        wedding.setWeddingDate(null);
+        wedding.setCity("");
+        wedding.setVenueName("");
+        wedding.setTotalBudgetTarget(BigDecimal.ZERO);
+        wedding.setExpectedGuestCapacity(0);
+        weddingRepository.save(wedding);
+
+        // 10. Reset slug to clean default
+        slugRepository.findByWeddingId(activeId).ifPresent(ws -> {
+            ws.setSlug("wedding-" + activeId);
+            slugRepository.save(ws);
+        });
+
+        return getActiveWorkspaceSummary(activeId);
     }
 }

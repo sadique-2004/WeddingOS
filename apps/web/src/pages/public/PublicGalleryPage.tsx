@@ -43,66 +43,8 @@ const CEREMONY_CATEGORIES = [
   'Guest Candids',
 ]
 
-const SAMPLE_APPROVED_PHOTOS: GalleryPhoto[] = [
-  {
-    id: 'photo-a1',
-    url: '/events/sangeet.jpg',
-    title: 'Grand Family Sangeet Dance Performance',
-    caption: 'The unforgettable finale dance under crystal chandeliers.',
-    ceremony: 'Sangeet Gala',
-    uploaderName: 'Pooja Hegde',
-    uploaderRole: 'Guest',
-    uploadedAt: '1 hour ago',
-    status: 'APPROVED',
-    fileSize: '4.2 MB',
-    dimensions: '3840 x 2560',
-    likesCount: 38,
-    featured: true,
-  },
-  {
-    id: 'photo-a2',
-    url: '/events/haldi.jpg',
-    title: 'Phoolon Ki Holi & Marigold Showers',
-    caption: 'Joyous laughter during the turmeric and organic flower petal blessings.',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Arjun Verma',
-    uploaderRole: 'Groom Cousin',
-    uploadedAt: '2 hours ago',
-    status: 'APPROVED',
-    fileSize: '3.6 MB',
-    dimensions: '3000 x 2000',
-    likesCount: 29,
-  },
-  {
-    id: 'photo-a3',
-    url: '/events/pheras.jpg',
-    title: 'Sacred Seven Vows Around the Holy Agni',
-    caption: 'Sunset vows at the lakeside palace pavilion.',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Simran Sethi',
-    uploaderRole: 'Maid of Honor',
-    uploadedAt: '3 hours ago',
-    status: 'APPROVED',
-    fileSize: '5.1 MB',
-    dimensions: '4000 x 3000',
-    likesCount: 54,
-    featured: true,
-  },
-  {
-    id: 'photo-a4',
-    url: '/events/reception.jpg',
-    title: 'Royal Reception Gala Toast & Banquet',
-    caption: 'Welcoming the newlyweds under the starlit Udaipur sky.',
-    ceremony: 'Reception Night',
-    uploaderName: 'Sameer Khan',
-    uploaderRole: 'Family Friend',
-    uploadedAt: '4 hours ago',
-    status: 'APPROVED',
-    fileSize: '4.8 MB',
-    dimensions: '3840 x 2160',
-    likesCount: 42,
-  },
-]
+const SAMPLE_APPROVED_PHOTOS: GalleryPhoto[] = []
+
 
 export default function PublicGalleryPage() {
   const { slug } = useParams<{ slug: string }>()
@@ -118,9 +60,9 @@ export default function PublicGalleryPage() {
     }
     return {
       id: 1,
-      brideName: 'Aisha',
-      groomName: 'Imran',
-      city: 'Udaipur, Rajasthan',
+      brideName: '',
+      groomName: '',
+      city: '',
     }
   })
 
@@ -143,7 +85,7 @@ export default function PublicGalleryPage() {
     } catch {
       // ignore
     }
-    return SAMPLE_APPROVED_PHOTOS
+    return []
   })
 
   const [selectedCategory, setSelectedCategory] = useState<string>('All')

@@ -70,4 +70,11 @@ public class WorkspaceController {
         String slug = payload.get("slug");
         return ResponseEntity.ok(workspaceService.updateWeddingDetails(weddingId, bride, groom, date, city, venue, slug));
     }
+
+    @PostMapping("/reset")
+    @Operation(summary = "Reset all workspace data to a clean blank slate")
+    public ResponseEntity<Map<String, Object>> resetWorkspace(@RequestParam(defaultValue = "1") Long weddingId) {
+        return ResponseEntity.ok(workspaceService.resetWorkspaceData(weddingId));
+    }
 }
+

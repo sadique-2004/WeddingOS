@@ -35,93 +35,8 @@ export interface WeddingEvent {
   imageUrl?: string
 }
 
-const INITIAL_EVENTS: WeddingEvent[] = [
-  {
-    id: 'evt-1',
-    name: 'Haldi & Phoolon Ki Holi',
-    eventType: 'haldi',
-    eventDate: '2026-12-11',
-    dayLabel: 'Day 1 • Morning',
-    startTime: '10:30 AM',
-    endTime: '01:30 PM',
-    venueName: 'The Courtyard Mandap, Udaivilas',
-    address: 'Haridas Ji Ki Magri, Udaipur, Rajasthan 313001',
-    dressCode: 'Shades of Marigold Yellow & Mustard Bandhani',
-    mapUrl: 'https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur',
-    description:
-      'A joyful morning ceremony of turmeric paste blessings, followed by organic yellow and orange petal showers, sweet lassi, and lively Mangal Geet.',
-    attendeeEstimate: 220,
-    imageUrl: '/events/haldi.jpg',
-  },
-  {
-    id: 'evt-2',
-    name: 'Mehendi & High Tea Sundowner',
-    eventType: 'mehendi',
-    eventDate: '2026-12-11',
-    dayLabel: 'Day 1 • Afternoon',
-    startTime: '04:00 PM',
-    endTime: '08:00 PM',
-    venueName: 'Poolside Promenade & Royal Verandah',
-    address: 'Haridas Ji Ki Magri, Udaipur, Rajasthan 313001',
-    dressCode: 'Boho Pastel Florals, Mint Greens & Leheriya Kurta-Pajamas',
-    mapUrl: 'https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur',
-    description:
-      'Intricate bridal henna sessions for family and friends, accompanied by Rajasthani folk musicians, artisanal chaat stalls, and sunset spritzers.',
-    attendeeEstimate: 280,
-    imageUrl: '/events/mehendi.jpg',
-  },
-  {
-    id: 'evt-3',
-    name: 'Sangeet & Cocktail Soiree',
-    eventType: 'sangeet',
-    eventDate: '2026-12-12',
-    dayLabel: 'Day 2 • Evening',
-    startTime: '07:30 PM',
-    endTime: '01:00 AM',
-    venueName: 'The Royal Crescent Ballroom',
-    address: 'Haridas Ji Ki Magri, Udaipur, Rajasthan 313001',
-    dressCode: 'Indo-Western Glitz, Sequin Sarees & Velvet Bandhgala Tuxedos',
-    mapUrl: 'https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur',
-    description:
-      'Choreographed Bollywood dance performances by the bride & groom’s families, awards ceremony, live Sufi band performance, and late-night DJ sets.',
-    attendeeEstimate: 380,
-    imageUrl: '/events/sangeet.jpg',
-  },
-  {
-    id: 'evt-4',
-    name: 'Baraat, Vedic Vivah & Pheras',
-    eventType: 'pheras',
-    eventDate: '2026-12-13',
-    dayLabel: 'Day 3 • Twilight',
-    startTime: '04:30 PM',
-    endTime: '08:30 PM',
-    venueName: 'Lakeside Lotus Pavilion & Floral Mandap',
-    address: 'Haridas Ji Ki Magri, Udaipur, Rajasthan 313001',
-    dressCode: 'Traditional Royal Silks, Banarasi Lehengas & Raw Silk Sherwanis with Saafa',
-    mapUrl: 'https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur',
-    description:
-      'The groom’s regal arrival on royal vintage car, sacred Hindu mantras, seven eternal vows around the holy fire, and the divine Sindoor ceremony at dusk.',
-    attendeeEstimate: 450,
-    imageUrl: '/events/pheras.jpg',
-  },
-  {
-    id: 'evt-5',
-    name: 'Grand Royal Reception & Dinner',
-    eventType: 'reception',
-    eventDate: '2026-12-13',
-    dayLabel: 'Day 3 • Night',
-    startTime: '09:00 PM',
-    endTime: '02:00 AM',
-    venueName: 'Mewar Banquet Lawns & Mirror Palace',
-    address: 'Haridas Ji Ki Magri, Udaipur, Rajasthan 313001',
-    dressCode: 'Formal Black Tie, Royal Velvets & Haute Couture Gowns',
-    mapUrl: 'https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur',
-    description:
-      'A formal sit-down 7-course royal feast, champagne toast, live acoustic symphony orchestra, and wedding cake cutting with royal fireworks over Lake Pichola.',
-    attendeeEstimate: 480,
-    imageUrl: '/events/reception.jpg',
-  },
-]
+const INITIAL_EVENTS: WeddingEvent[] = []
+
 
 export default function EventsPage() {
   const getActiveWeddingId = (): number => {
@@ -168,15 +83,11 @@ export default function EventsPage() {
           }))
         )
       } else {
-        setEvents(wid === 1 ? INITIAL_EVENTS : [])
+        setEvents([])
       }
     } catch (err) {
       console.warn('Backend events fetch error/offline, using fallback:', err)
-      if (wid === 1) {
-        setEvents(INITIAL_EVENTS)
-      } else {
-        setEvents([])
-      }
+      setEvents([])
     } finally {
       setLoading(false)
     }

@@ -430,7 +430,7 @@ export default function GalleryPage() {
     } catch {
       // ignore
     }
-    return INITIAL_PHOTOS
+    return []
   })
 
   const [settings, setSettings] = useState<GallerySettings>(() => {

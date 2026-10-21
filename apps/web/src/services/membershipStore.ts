@@ -63,128 +63,9 @@ if (typeof window !== 'undefined') {
   syncMembersFromBackend().catch(() => {})
 }
 
-export const DEFAULT_MEMBERS: WeddingMembership[] = [
-  {
-    id: 'mem-1',
-    weddingId: 'wed-1',
-    userId: 'user-aisha-1',
-    fullName: 'Aisha Sharma',
-    email: 'aisha.sharma@weddingos.app',
-    role: 'ADMIN',
-    title: 'Bride & Workspace Co-Owner',
-    modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
-    joinedAt: '2026-09-01T10:00:00.000Z',
-    createdAt: '2026-09-01T10:00:00.000Z',
-    isCurrentSessionUser: true,
-  },
-  {
-    id: 'mem-2',
-    weddingId: 'wed-1',
-    userId: 'user-imran-2',
-    fullName: 'Imran Khan',
-    email: 'imran.khan@weddingos.app',
-    role: 'ADMIN',
-    title: 'Groom & Workspace Co-Owner',
-    modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
-    joinedAt: '2026-09-01T10:30:00.000Z',
-    createdAt: '2026-09-01T10:30:00.000Z',
-  },
-  {
-    id: 'mem-3',
-    weddingId: 'wed-1',
-    userId: 'user-priya-3',
-    fullName: 'Priya Patel',
-    email: 'priya.patel@palaceconcierge.com',
-    role: 'ORGANIZER',
-    title: 'Chief Hospitality & Desk Lead',
-    modulePermissions: {
-      events: true,
-      tasks: true,
-      invitations: true,
-      check_in: true,
-      expenses: false,
-      vendors: false,
-      website: false,
-      gallery: true,
-    },
-    invitedByUserId: 'user-aisha-1',
-    invitedByUserName: 'Aisha Sharma',
-    joinedAt: '2026-09-12T14:20:00.000Z',
-    createdAt: '2026-09-10T09:15:00.000Z',
-  },
-  {
-    id: 'mem-4',
-    weddingId: 'wed-1',
-    userId: 'user-kabir-4',
-    fullName: 'Kabir Mehta',
-    email: 'kabir.mehta@royalproduction.in',
-    role: 'ORGANIZER',
-    title: 'Stage & Ceremonies Director',
-    modulePermissions: {
-      events: true,
-      tasks: true,
-      invitations: false,
-      check_in: false,
-      expenses: false,
-      vendors: true,
-      website: false,
-      gallery: false,
-    },
-    invitedByUserId: 'user-imran-2',
-    invitedByUserName: 'Imran Khan',
-    joinedAt: '2026-09-18T16:45:00.000Z',
-    createdAt: '2026-09-15T11:00:00.000Z',
-  },
-]
+export const DEFAULT_MEMBERS: WeddingMembership[] = []
 
-export const DEFAULT_INVITATIONS: OrganizerInvitation[] = [
-  {
-    id: 'inv-org-1',
-    weddingId: 'wed-1',
-    targetEmail: 'neha.verma@weddingcraft.in',
-    targetName: 'Neha Verma',
-    role: 'ORGANIZER',
-    modulePermissions: {
-      events: false,
-      tasks: true,
-      invitations: true,
-      check_in: true,
-      expenses: false,
-      vendors: false,
-      website: false,
-      gallery: true,
-    },
-    token: 'wos-team-neha9821',
-    invitedByUserId: 'user-aisha-1',
-    invitedByUserName: 'Aisha Sharma',
-    status: 'PENDING',
-    createdAt: '2026-10-15T10:00:00.000Z',
-    expiresAt: '2026-10-22T10:00:00.000Z',
-  },
-  {
-    id: 'inv-org-2',
-    weddingId: 'wed-1',
-    targetEmail: 'samir.desai@soundstage.com',
-    targetName: 'Samir Desai',
-    role: 'ORGANIZER',
-    modulePermissions: {
-      events: true,
-      tasks: false,
-      invitations: false,
-      check_in: false,
-      expenses: false,
-      vendors: true,
-      website: false,
-      gallery: false,
-    },
-    token: 'wos-team-samir4412',
-    invitedByUserId: 'user-imran-2',
-    invitedByUserName: 'Imran Khan',
-    status: 'PENDING',
-    createdAt: '2026-10-16T15:30:00.000Z',
-    expiresAt: '2026-10-23T15:30:00.000Z',
-  },
-]
+export const DEFAULT_INVITATIONS: OrganizerInvitation[] = []
 
 export function getMembers(weddingId?: number): WeddingMembership[] {
   const wid = weddingId ?? getActiveWeddingId()
@@ -200,11 +81,7 @@ export function getMembers(weddingId?: number): WeddingMembership[] {
   } catch (err) {
     console.error('Failed reading members from storage', err)
   }
-  if (wid === 1) {
-    saveMembers(DEFAULT_MEMBERS, 1)
-    return DEFAULT_MEMBERS
-  }
-  // For new workspace: default to the current session owner
+  // For workspace: default to the current session owner
   const defaultOwner: WeddingMembership[] = [
     {
       id: `mem-${wid}-owner`,
@@ -473,8 +350,25 @@ export function acceptInvitation(
   return newMember
 }
 
-export function resetMembershipDemoData(): void {
-  localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(DEFAULT_MEMBERS))
-  localStorage.setItem(INVITES_STORAGE_KEY, JSON.stringify(DEFAULT_INVITATIONS))
+export function resetMembershipDemoData(weddingId?: number): void {
+  const wid = weddingId ?? getActiveWeddingId()
+  const defaultOwner: WeddingMembership[] = [
+    {
+      id: `mem-${wid}-owner`,
+      weddingId: String(wid),
+      userId: `user-owner-${wid}`,
+      fullName: 'Workspace Owner',
+      email: 'owner@weddingos.app',
+      role: 'ADMIN',
+      title: 'Couple & Workspace Owner',
+      modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
+      joinedAt: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      isCurrentSessionUser: true,
+    },
+  ]
+  localStorage.setItem(getMembersStorageKey(wid), JSON.stringify(defaultOwner))
+  localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(defaultOwner))
+  localStorage.setItem(INVITES_STORAGE_KEY, JSON.stringify([]))
   window.dispatchEvent(new Event('weddingos_members_updated'))
 }

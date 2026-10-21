@@ -49,19 +49,19 @@ export interface WeddingWorkspaceSettings {
 
 const DEFAULT_SETTINGS: WeddingWorkspaceSettings = {
   id: 'wed-1',
-  title: "Aisha & Imran's Royal Wedding",
-  brideName: 'Aisha',
-  groomName: 'Imran',
-  weddingDate: '2027-02-18',
-  locationName: 'Bengaluru, Karnataka',
-  description: 'Together with our families, we joyfully invite you to celebrate our union.',
-  slug: 'aisha-and-imran',
+  title: 'My Wedding Workspace',
+  brideName: '',
+  groomName: '',
+  weddingDate: '',
+  locationName: '',
+  description: '',
+  slug: 'my-wedding',
   currency: 'INR (₹)',
   timezone: 'Asia/Kolkata (IST - UTC+05:30)',
-  livestreamEnabled: true,
-  livestreamUrl: 'https://youtube.com/live/royal-wedding-stream',
-  livestreamTitle: 'Holy Pheras & Royal Reception Live Broadcast',
-  livestreamNotes: 'HD Multicam livestream begins 30 minutes before the ceremony start time.',
+  livestreamEnabled: false,
+  livestreamUrl: '',
+  livestreamTitle: '',
+  livestreamNotes: '',
   soundEnabled: true,
   allowPublicRsvp: true,
   allowGuestUploads: true,
@@ -217,16 +217,29 @@ export default function SettingsPage() {
     setSuccessNotice('WeddingOS complete JSON backup archive exported successfully.')
   }
 
-  // Handle Reset All Demo Data
-  const handleFullResetDemoData = () => {
+  // Handle Reset All Data
+  const handleFullResetDemoData = async () => {
+    try {
+      await workspacesApi.reset(1).catch(() => {})
+    } catch {}
     resetToDemoData()
-    resetMembershipDemoData()
-    localStorage.setItem('weddingos_active_wedding', JSON.stringify(DEFAULT_SETTINGS))
-    setSettings(DEFAULT_SETTINGS)
+    resetMembershipDemoData(1)
+    const cleanSettings = { ...DEFAULT_SETTINGS }
+    localStorage.setItem('weddingos_active_wedding', JSON.stringify(cleanSettings))
+    setSettings(cleanSettings)
+
+    const keys = [
+      'weddingos_1_events', 'weddingos_1_expenses', 'weddingos_1_tasks', 'weddingos_1_vendors',
+      'weddingos_events_1', 'weddingos_expenses_1', 'weddingos_tasks_1', 'weddingos_vendors_1',
+      'weddingos_gallery_photos', 'weddingos_gallery_settings', 'weddingos_website_config'
+    ]
+    keys.forEach((k) => localStorage.removeItem(k))
 
     window.dispatchEvent(new Event('weddingos_wedding_updated'))
+    window.dispatchEvent(new Event('weddingos_invitations_updated'))
+    window.dispatchEvent(new Event('weddingos_members_updated'))
     setIsResetConfirmOpen(false)
-    setSuccessNotice('All wedding data has been reset to clean royal demo state.')
+    setSuccessNotice('All wedding data has been reset to a clean blank slate.')
   }
 
   return (

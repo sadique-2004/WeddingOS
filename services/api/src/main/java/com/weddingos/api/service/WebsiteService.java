@@ -75,12 +75,12 @@ public class WebsiteService {
         } else {
             wedding = weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
                 Wedding w = new Wedding();
-                w.setBrideName("Aisha");
-                w.setGroomName("Imran");
-                w.setWeddingDate(java.time.LocalDate.now().plusMonths(4));
-                w.setCity("Udaipur, Rajasthan");
-                w.setVenueName("The Oberoi Udaivilas");
-                w.setTotalBudgetTarget(new java.math.BigDecimal("2500000.00"));
+                w.setBrideName("");
+                w.setGroomName("");
+                w.setWeddingDate(null);
+                w.setCity("");
+                w.setVenueName("");
+                w.setTotalBudgetTarget(java.math.BigDecimal.ZERO);
                 return weddingRepository.save(w);
             });
         }

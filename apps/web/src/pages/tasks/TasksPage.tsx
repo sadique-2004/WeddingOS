@@ -31,96 +31,7 @@ export interface Task {
   relatedCeremony?: string
 }
 
-const INITIAL_TASKS: Task[] = [
-  {
-    id: 'tsk-1',
-    title: 'Finalize Royal Safa Tying Master & Turbans',
-    description: 'Confirm 180 bespoke peach and gold tissue safas with traditional Mewari tying artisans for Baraat.',
-    priority: 'HIGH',
-    status: 'TODO',
-    dueDate: '2026-11-20',
-    assigneeName: 'Kabir & Brother',
-    assigneeRole: 'Groom Family',
-    relatedCeremony: 'Baraat & Pheras',
-  },
-  {
-    id: 'tsk-2',
-    title: 'Sangeet Choreography Music Mix & Audio Tracks',
-    description: 'Submit edited 12-minute family medley track to the AV console team for ballroom acoustics test.',
-    priority: 'HIGH',
-    status: 'IN_PROGRESS',
-    dueDate: '2026-11-25',
-    assigneeName: 'Rhea Singhania',
-    assigneeRole: 'Sister of Groom',
-    relatedCeremony: 'Sangeet & Cocktail',
-  },
-  {
-    id: 'tsk-3',
-    title: 'Source 50kg Organic Mogra & Desi Rose Petals',
-    description: 'Procure pesticide-free yellow marigolds and scented roses for morning Phoolon Ki Holi.',
-    priority: 'MEDIUM',
-    status: 'TODO',
-    dueDate: '2026-12-01',
-    assigneeName: 'Devika Sharma',
-    assigneeRole: 'Master Wedding Planner',
-    relatedCeremony: 'Haldi & Phoolon Ki Holi',
-  },
-  {
-    id: 'tsk-4',
-    title: 'Bride Bridal Lehenga Trial & Final Steaming',
-    description: 'Final fitting appointment at Sabyasachi atelier, inspect zardozi embroidery and dupatta draping.',
-    priority: 'HIGH',
-    status: 'COMPLETED',
-    dueDate: '2026-11-10',
-    assigneeName: 'Ananya Roy',
-    assigneeRole: 'Bride',
-    relatedCeremony: 'Baraat & Pheras',
-  },
-  {
-    id: 'tsk-5',
-    title: 'Confirm Live Wood-Fired Chaat & Kulhad Chai Counter',
-    description: 'Approve menu items for Chandni Chowk style street delicacies during poolside Mehendi.',
-    priority: 'MEDIUM',
-    status: 'IN_PROGRESS',
-    dueDate: '2026-11-28',
-    assigneeName: 'Devika Sharma',
-    assigneeRole: 'Master Wedding Planner',
-    relatedCeremony: 'Mehendi & High Tea',
-  },
-  {
-    id: 'tsk-6',
-    title: 'Luxury Vintage Car Permit & Lake Palace Boat Jetty',
-    description: 'Secure lake crossing permits with palace security for vintage 1948 Rolls Royce arrival.',
-    priority: 'MEDIUM',
-    status: 'COMPLETED',
-    dueDate: '2026-11-15',
-    assigneeName: 'Kabir Singhania',
-    assigneeRole: 'Groom',
-    relatedCeremony: 'Baraat & Pheras',
-  },
-  {
-    id: 'tsk-7',
-    title: 'VIP Welcome Hampers & Personalized Itinerary Letters',
-    description: 'Assemble 140 brass gift hampers with Mewari sweets, brass diyas, and printed daywise itineraries.',
-    priority: 'LOW',
-    status: 'TODO',
-    dueDate: '2026-12-05',
-    assigneeName: 'Ananya & Mother',
-    assigneeRole: 'Bride Family',
-    relatedCeremony: 'All Ceremonies',
-  },
-  {
-    id: 'tsk-8',
-    title: 'Lake Pichola Fireworks License Clearance',
-    description: 'Obtain local civil defense green-fireworks permit for 5-minute synchronised midnight spectacle.',
-    priority: 'HIGH',
-    status: 'IN_PROGRESS',
-    dueDate: '2026-11-22',
-    assigneeName: 'Devika Sharma',
-    assigneeRole: 'Master Wedding Planner',
-    relatedCeremony: 'Grand Royal Reception',
-  },
-]
+const INITIAL_TASKS: Task[] = []
 
 export default function TasksPage() {
   const getActiveWeddingId = (): number => {
@@ -171,13 +82,8 @@ export default function TasksPage() {
       } catch {}
     }
 
-    if (wid === 1) {
-      setTasks(INITIAL_TASKS)
-      localStorage.setItem(storageKey, JSON.stringify(INITIAL_TASKS))
-    } else {
-      setTasks([])
-      localStorage.setItem(storageKey, JSON.stringify([]))
-    }
+    setTasks([])
+    localStorage.setItem(storageKey, JSON.stringify([]))
   }
 
   useEffect(() => {

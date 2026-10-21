@@ -52,167 +52,10 @@ if (typeof window !== 'undefined') {
   syncInvitationsFromBackend().catch(() => {})
 }
 
-export const DEFAULT_INVITATIONS: FamilyInvitation[] = [
-  {
-    id: 'inv-1',
-    displayName: 'The Singhania Family',
-    primaryContactName: 'Rajesh Singhania',
-    phoneNumber: '+91 98201 44521',
-    email: 'rajesh.singhania@mewartextiles.com',
-    circle: 'Dadihal (Paternal)',
-    maxAttendees: 5,
-    actualAttendees: 5,
-    rsvpStatus: 'ATTENDING',
-    ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
-    dietaryNotes: 'Strict Jain Catering (No root vegetables) for 2 elders',
-    invitationToken: 'wos-singhania-8821',
-    checkedInAt: null,
-    checkedInBy: null,
-    organizerNotes: 'Seated near Stage Row A. Family elders need golf cart at palace gate.',
-  },
-  {
-    id: 'inv-2',
-    displayName: 'Justice & Mrs. Verma',
-    primaryContactName: 'Justice Alok Verma',
-    phoneNumber: '+91 98110 99823',
-    email: 'alok.verma@delhicourts.gov.in',
-    circle: 'VIP Patrons',
-    maxAttendees: 2,
-    actualAttendees: 2,
-    rsvpStatus: 'ATTENDING',
-    ceremoniesAllowed: ['Sangeet', 'Pheras', 'Reception'],
-    dietaryNotes: 'Diabetic dessert alternatives requested',
-    invitationToken: 'wos-verma-4192',
-    checkedInAt: null,
-    checkedInBy: null,
-    organizerNotes: 'VIP protocol. Escort directly to Royal Courtyard suite.',
-  },
-  {
-    id: 'inv-3',
-    displayName: 'The Roy Chowdhury Clan',
-    primaryContactName: 'Subir Roy Chowdhury',
-    phoneNumber: '+91 98300 23145',
-    email: 'subir@kolkatatea.in',
-    circle: 'Nanihal (Maternal)',
-    maxAttendees: 6,
-    actualAttendees: 4,
-    rsvpStatus: 'ATTENDING',
-    ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
-    dietaryNotes: 'Standard Royal Indian Vegetarian & Non-Veg',
-    invitationToken: 'wos-chowdhury-7301',
-    checkedInAt: new Date(Date.now() - 45 * 60 * 1000).toISOString(), // Checked in 45 mins ago
-    checkedInBy: 'Aisha Sharma (Coordinator)',
-    organizerNotes: 'Arrived via Terminal 2 flight, luggage stored at hospitality desk.',
-  },
-  {
-    id: 'inv-4',
-    displayName: 'Dr. Siddharth & Dr. Neha Kapoor',
-    primaryContactName: 'Dr. Siddharth Kapoor',
-    phoneNumber: '+44 7911 123456',
-    email: 'sid.kapoor@nhs.uk',
-    circle: 'International',
-    maxAttendees: 3,
-    actualAttendees: 3,
-    rsvpStatus: 'PENDING',
-    ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
-    dietaryNotes: 'Severe nut allergy for child (Advait)',
-    invitationToken: 'wos-kapoor-9920',
-    checkedInAt: null,
-    checkedInBy: null,
-    organizerNotes: 'Landing in Bengaluru tomorrow morning 7:30 AM.',
-  },
-  {
-    id: 'inv-5',
-    displayName: 'Vikramaditya Oberoi & Partners',
-    primaryContactName: 'Vikramaditya Oberoi',
-    phoneNumber: '+91 98210 65432',
-    email: 'v.oberoi@palacecapital.com',
-    circle: 'Friends & Colleagues',
-    maxAttendees: 2,
-    actualAttendees: 2,
-    rsvpStatus: 'PENDING',
-    ceremoniesAllowed: ['Sangeet', 'Reception'],
-    invitationToken: 'wos-oberoi-3310',
-    checkedInAt: null,
-    checkedInBy: null,
-  },
-  {
-    id: 'inv-6',
-    displayName: 'Ambassador & Mrs. K.S. Menon',
-    primaryContactName: 'Ambassador K.S. Menon',
-    phoneNumber: '+91 98450 11984',
-    email: 'ksmenon@diplomats.org',
-    circle: 'VIP Patrons',
-    maxAttendees: 2,
-    actualAttendees: 2,
-    rsvpStatus: 'ATTENDING',
-    ceremoniesAllowed: ['Pheras', 'Reception'],
-    dietaryNotes: 'Low sodium South Indian delicacies',
-    invitationToken: 'wos-menon-5512',
-    checkedInAt: null,
-    checkedInBy: null,
-    organizerNotes: 'Wheelchair assistance requested at Grand Ballroom entrance.',
-  },
-  {
-    id: 'inv-7',
-    displayName: 'The Deshmukh Family',
-    primaryContactName: 'Anil Deshmukh',
-    phoneNumber: '+91 98220 89123',
-    email: 'deshmukh.anil@puneeng.com',
-    circle: 'Nanihal (Maternal)',
-    maxAttendees: 4,
-    actualAttendees: 4,
-    rsvpStatus: 'ATTENDING',
-    ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
-    dietaryNotes: 'Pure Maharashtrian vegetarian preference',
-    invitationToken: 'wos-deshmukh-2940',
-    checkedInAt: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
-    checkedInBy: 'Imran Khan (Desk Lead)',
-  },
-  {
-    id: 'inv-8',
-    displayName: 'Col. Ranjit Singh Rathore',
-    primaryContactName: 'Col. Ranjit Singh',
-    phoneNumber: '+91 94140 88219',
-    email: 'ranjit.rathore@rajasthanregiment.org',
-    circle: 'Dadihal (Paternal)',
-    maxAttendees: 4,
-    actualAttendees: 0,
-    rsvpStatus: 'NOT_ATTENDING',
-    ceremoniesAllowed: ['Baraat', 'Reception'],
-    dietaryNotes: 'Sending ceremonial blessings and token from Jodhpur',
-    invitationToken: 'wos-rathore-1092',
-    checkedInAt: null,
-    checkedInBy: null,
-  },
-]
+export const DEFAULT_INVITATIONS: FamilyInvitation[] = []
 
-export const DEFAULT_LOGS: CheckInLogEntry[] = [
-  {
-    id: 'log-1',
-    invitationId: 'inv-3',
-    familyName: 'The Roy Chowdhury Clan',
-    primaryContact: 'Subir Roy Chowdhury',
-    attendeeCount: 4,
-    maxAttendees: 6,
-    circle: 'Nanihal (Maternal)',
-    timestamp: new Date(Date.now() - 45 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    checkedInBy: 'Aisha Sharma (Coordinator)',
-    isDuplicateAttempt: false,
-  },
-  {
-    id: 'log-2',
-    invitationId: 'inv-7',
-    familyName: 'The Deshmukh Family',
-    primaryContact: 'Anil Deshmukh',
-    attendeeCount: 4,
-    maxAttendees: 4,
-    circle: 'Nanihal (Maternal)',
-    timestamp: new Date(Date.now() - 15 * 60 * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-    checkedInBy: 'Imran Khan (Desk Lead)',
-    isDuplicateAttempt: false,
-  },
-]
+export const DEFAULT_LOGS: CheckInLogEntry[] = []
+
 
 export function getInvitations(weddingId?: number): FamilyInvitation[] {
   const wid = weddingId ?? getActiveWeddingId()
@@ -227,11 +70,6 @@ export function getInvitations(weddingId?: number): FamilyInvitation[] {
     }
   } catch (err) {
     console.error('Failed reading invitations from storage', err)
-  }
-  // Initialize with defaults only if wedding 1 (seed demo)
-  if (wid === 1) {
-    saveInvitations(DEFAULT_INVITATIONS, 1)
-    return DEFAULT_INVITATIONS
   }
   return []
 }
@@ -259,8 +97,7 @@ export function getCheckInLogs(): CheckInLogEntry[] {
   } catch (err) {
     console.error('Failed reading check-in logs from storage', err)
   }
-  saveCheckInLogs(DEFAULT_LOGS)
-  return DEFAULT_LOGS
+  return []
 }
 
 export function saveCheckInLogs(logs: CheckInLogEntry[]): void {
@@ -419,7 +256,9 @@ export function undoCheckIn(invitationId: string): FamilyInvitation {
 }
 
 export function resetToDemoData(): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_INVITATIONS))
-  localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(DEFAULT_LOGS))
+  const wid = getActiveWeddingId()
+  localStorage.setItem(getStorageKey(wid), JSON.stringify([]))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify([]))
+  localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify([]))
   window.dispatchEvent(new Event('weddingos_invitations_updated'))
 }

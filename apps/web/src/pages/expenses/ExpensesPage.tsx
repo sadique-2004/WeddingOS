@@ -62,99 +62,8 @@ const CATEGORY_COLORS: Record<ExpenseCategory, { bg: string; text: string; borde
   'Other': { bg: 'bg-neutral-100', text: 'text-neutral-700', border: 'border-neutral-200', bar: 'bg-neutral-500' },
 }
 
-const INITIAL_EXPENSES: Expense[] = [
-  {
-    id: 'exp-1',
-    title: 'The Oberoi Udaivilas 3-Day Resort Buyout Advance',
-    amount: 1450000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-05',
-    category: 'Venue & Hospitality',
-    relatedCeremony: 'All Ceremonies',
-    vendorName: 'The Oberoi Udaivilas',
-    paymentStatus: 'ADVANCE_PAID',
-    paymentMethod: 'NEFT / RTGS',
-    notes: 'Advance booking for 85 luxury heritage suites, breakfast banquets and lake jetty access.',
-  },
-  {
-    id: 'exp-2',
-    title: 'Royal Mewar Floral Mandap & Lotus Stage Decor',
-    amount: 420000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-10',
-    category: 'Decor & Production',
-    relatedCeremony: 'Baraat & Pheras',
-    vendorName: 'Ferns & Petals Royal Production',
-    paymentStatus: 'PAID',
-    paymentMethod: 'NEFT / RTGS',
-    notes: 'Exotic tuberoses, 500 brass diyas, and floating water lily mandap construction.',
-  },
-  {
-    id: 'exp-3',
-    title: 'Bridal Heritage Red Zardozi Lehenga & Veils',
-    amount: 380000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-12',
-    category: 'Attire & Jewellery',
-    relatedCeremony: 'Baraat & Pheras',
-    vendorName: 'Sabyasachi Mukherjee Atelier',
-    paymentStatus: 'PAID',
-    paymentMethod: 'Credit Card',
-    notes: 'Handcrafted antique dabka and zardozi bridal lehenga with custom monogram embroidery.',
-  },
-  {
-    id: 'exp-4',
-    title: 'Live Sufi Troupe & Sangeet Bollywood Audio-Visual Console',
-    amount: 275000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-14',
-    category: 'Music & Entertainment',
-    relatedCeremony: 'Sangeet & Cocktail',
-    vendorName: 'Dhruva Live Acoustic Symphony',
-    paymentStatus: 'ADVANCE_PAID',
-    paymentMethod: 'UPI',
-    notes: '7-piece live Sufi band + concert sound setup for crescent ballroom evening.',
-  },
-  {
-    id: 'exp-5',
-    title: 'Lake Pichola 4K Drone & Candid Cinematography Deck',
-    amount: 350000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-15',
-    category: 'Photography & Cinematography',
-    relatedCeremony: 'All Ceremonies',
-    vendorName: 'Stories by Joseph Radhik Studios',
-    paymentStatus: 'ADVANCE_PAID',
-    paymentMethod: 'NEFT / RTGS',
-    notes: 'Full multi-camera 4-day team with aerial drones and cinematic wedding film reel.',
-  },
-  {
-    id: 'exp-6',
-    title: 'Artisanal Mewari Sweets & Brass Welcome Hampers',
-    amount: 110000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-16',
-    category: 'Gifting & Invites',
-    relatedCeremony: 'All Ceremonies',
-    vendorName: 'Jodhpur Royal Sweets & Handicrafts',
-    paymentStatus: 'PAID',
-    paymentMethod: 'UPI',
-    notes: '140 personalized engraved brass hampers with Ghewar and saffron dry fruits.',
-  },
-  {
-    id: 'exp-7',
-    title: 'Vintage 1948 Rolls Royce & Palace Boat Jetty Transfers',
-    amount: 100000,
-    currencyCode: 'INR',
-    expenseDate: '2026-10-18',
-    category: 'Logistics & Vintage Cars',
-    relatedCeremony: 'Baraat & Pheras',
-    vendorName: 'Udaipur Heritage Vintage Fleet',
-    paymentStatus: 'PENDING',
-    paymentMethod: 'Cheque',
-    notes: 'Groom royal Baraat arrival vintage car permit and 4 luxury motor launches.',
-  },
-]
+const INITIAL_EXPENSES: Expense[] = []
+
 
 export default function ExpensesPage() {
   const getActiveWeddingId = (): number => {
@@ -211,13 +120,8 @@ export default function ExpensesPage() {
       } catch {}
     }
 
-    if (wid === 1) {
-      setExpenses(INITIAL_EXPENSES)
-      localStorage.setItem(storageKey, JSON.stringify(INITIAL_EXPENSES))
-    } else {
-      setExpenses([])
-      localStorage.setItem(storageKey, JSON.stringify([]))
-    }
+    setExpenses([])
+    localStorage.setItem(storageKey, JSON.stringify([]))
   }
 
   useEffect(() => {

@@ -88,6 +88,10 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(details),
     }),
+  reset: (weddingId = 1) =>
+    request<WorkspaceSummary>(`/workspaces/reset?weddingId=${weddingId}`, {
+      method: 'POST',
+    }),
 }
 export const workspacesApi = workspaceApi
 
