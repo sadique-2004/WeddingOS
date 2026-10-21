@@ -150,7 +150,7 @@ export default function WorkspaceOnboardingPage() {
                       required
                       value={formData.brideName}
                       onChange={handleChange}
-                      placeholder="e.g. Aisha"
+                      placeholder="e.g. Priya"
                     />
                     <Input
                       label="Groom's Name"
@@ -158,7 +158,7 @@ export default function WorkspaceOnboardingPage() {
                       required
                       value={formData.groomName}
                       onChange={handleChange}
-                      placeholder="e.g. Imran"
+                      placeholder="e.g. Rahul"
                     />
                   </div>
 
@@ -190,7 +190,7 @@ export default function WorkspaceOnboardingPage() {
                     name="title"
                     value={formData.title}
                     onChange={handleChange}
-                    placeholder="e.g. Aisha & Imran's Wedding"
+                    placeholder="e.g. The Royal Wedding Celebration"
                     helperText="Appears on invitations and dashboard header."
                   />
 

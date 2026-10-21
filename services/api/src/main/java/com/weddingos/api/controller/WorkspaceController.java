@@ -76,5 +76,11 @@ public class WorkspaceController {
     public ResponseEntity<Map<String, Object>> resetWorkspace(@RequestParam(defaultValue = "1") Long weddingId) {
         return ResponseEntity.ok(workspaceService.resetWorkspaceData(weddingId));
     }
+
+    @PostMapping("/{id}/reset")
+    @Operation(summary = "Reset workspace data by ID")
+    public ResponseEntity<Map<String, Object>> resetWorkspaceById(@PathVariable Long id) {
+        return ResponseEntity.ok(workspaceService.resetWorkspaceData(id));
+    }
 }
 

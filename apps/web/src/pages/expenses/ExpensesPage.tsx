@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { expensesApi } from '../../services/apiClient'
+import { expensesApi, workspacesApi } from '../../services/apiClient'
 import {
   DollarSign,
   TrendingUp,
@@ -80,13 +80,55 @@ export default function ExpensesPage() {
   }
 
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
-  const [totalBudget, setTotalBudget] = useState<number>(4500000) // Default ₹45 Lakhs
+  const [totalBudget, setTotalBudget] = useState<number>(() => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed.totalBudgetTarget !== undefined && parsed.totalBudgetTarget !== null) {
+          return Number(parsed.totalBudgetTarget) || 0
+        }
+      }
+    } catch {}
+    return 0
+  })
   const [isBudgetModalOpen, setIsBudgetModalOpen] = useState(false)
-  const [budgetInput, setBudgetInput] = useState<string>('4500000')
+  const [budgetInput, setBudgetInput] = useState<string>(() => {
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        const b = Number(parsed.totalBudgetTarget) || 0
+        return b > 0 ? String(b) : ''
+      }
+    } catch {}
+    return ''
+  })
 
   const [expenses, setExpenses] = useState<Expense[]>([])
 
   const loadExpenses = async (wid: number) => {
+    // 1. Load actual workspace budget target set by Admin
+    try {
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        if (parsed.totalBudgetTarget !== undefined && parsed.totalBudgetTarget !== null) {
+          const b = Number(parsed.totalBudgetTarget) || 0
+          setTotalBudget(b)
+        }
+      }
+
+      const active = await workspacesApi.getActive(wid)
+      if (active && active.totalBudgetTarget !== undefined) {
+        const b = Number(active.totalBudgetTarget) || 0
+        setTotalBudget(b)
+      }
+    } catch {
+      // ignore
+    }
+
+    // 2. Load expense ledger items
     const storageKey = `weddingos_${wid}_expenses`
     try {
       const res: any = await expensesApi.getAll(wid)
@@ -349,12 +391,20 @@ export default function ExpensesPage() {
     setIsModalOpen(false)
   }
 
-  const handleUpdateBudget = (e: React.FormEvent) => {
+  const handleUpdateBudget = async (e: React.FormEvent) => {
     e.preventDefault()
-    const val = parseFloat(budgetInput)
-    if (!isNaN(val) && val > 0) {
-      setTotalBudget(val)
-      setIsBudgetModalOpen(false)
+    const val = parseFloat(budgetInput) || 0
+    setTotalBudget(val)
+    setIsBudgetModalOpen(false)
+
+    try {
+      await workspacesApi.updateBudget(val)
+      const stored = localStorage.getItem('weddingos_active_wedding')
+      const parsed = stored ? JSON.parse(stored) : {}
+      localStorage.setItem('weddingos_active_wedding', JSON.stringify({ ...parsed, totalBudgetTarget: val }))
+      window.dispatchEvent(new Event('weddingos_wedding_updated'))
+    } catch (err) {
+      console.warn('Failed syncing budget to backend:', err)
     }
   }
 
@@ -462,28 +512,41 @@ export default function ExpensesPage() {
             <button
               type="button"
               onClick={() => {
-                setBudgetInput(totalBudget.toString())
+                setBudgetInput(totalBudget > 0 ? totalBudget.toString() : '')
                 setIsBudgetModalOpen(true)
               }}
               className="text-[11px] font-semibold text-[#6f0617] hover:underline cursor-pointer flex items-center gap-1"
             >
               <Edit2 className="w-3 h-3" />
-              <span>Edit Cap</span>
+              <span>{totalBudget > 0 ? 'Edit Cap' : 'Set Budget'}</span>
             </button>
           </div>
 
           <div>
             <div className="font-sans text-3xl sm:text-4xl font-bold text-[#3a0208] leading-none tabular-nums">
-              {formatCompactINR(totalBudget)}
+              {totalBudget > 0 ? formatCompactINR(totalBudget) : 'Not Set'}
             </div>
             <span className="text-xs text-neutral-500 font-sans mt-1 block">
-              {formatINR(totalBudget)} total target
+              {totalBudget > 0 ? `${formatINR(totalBudget)} total target` : 'No budget set by admin yet'}
             </span>
           </div>
 
           <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500">
             <span>Currency: INR (₹)</span>
-            <span className="font-semibold text-emerald-700">Allocated</span>
+            {totalBudget > 0 ? (
+              <span className="font-semibold text-emerald-700">Allocated</span>
+            ) : (
+              <button
+                type="button"
+                onClick={() => {
+                  setBudgetInput('')
+                  setIsBudgetModalOpen(true)
+                }}
+                className="font-semibold text-[#6f0617] hover:underline cursor-pointer"
+              >
+                + Set Budget Target
+              </button>
+            )}
           </div>
         </div>
 
@@ -524,24 +587,44 @@ export default function ExpensesPage() {
             <span className="text-[10px] font-bold tracking-wider uppercase text-neutral-400">
               Uncommitted Runway
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold">
-              Surplus
+            <span
+              className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                totalBudget === 0
+                  ? 'bg-neutral-100 text-neutral-600'
+                  : remainingBudget < 0
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-emerald-50 text-emerald-700'
+              }`}
+            >
+              {totalBudget === 0 ? 'Not Set' : remainingBudget < 0 ? 'Deficit' : 'Surplus'}
             </span>
           </div>
 
           <div>
-            <div className="font-sans text-3xl sm:text-4xl font-bold text-emerald-700 leading-none tabular-nums">
-              {formatCompactINR(remainingBudget)}
+            <div
+              className={`font-sans text-3xl sm:text-4xl font-bold leading-none tabular-nums ${
+                totalBudget === 0
+                  ? 'text-neutral-500'
+                  : remainingBudget < 0
+                  ? 'text-red-700'
+                  : 'text-emerald-700'
+              }`}
+            >
+              {totalBudget > 0 ? formatCompactINR(remainingBudget) : '₹0'}
             </div>
             <span className="text-xs text-neutral-500 font-sans mt-1 block">
-              {formatINR(remainingBudget)} left to allocate
+              {totalBudget > 0
+                ? remainingBudget < 0
+                  ? `${formatINR(Math.abs(remainingBudget))} OVER BUDGET`
+                  : `${formatINR(remainingBudget)} left to allocate`
+                : 'Target budget not defined'}
             </span>
           </div>
 
           <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-[11px] text-neutral-500">
             <span>Buffer Margin:</span>
             <span className="font-semibold text-neutral-800">
-              {Math.max(100 - utilizationPercentage, 0)}% Available
+              {totalBudget > 0 ? `${Math.max(100 - utilizationPercentage, 0)}% Available` : 'N/A'}
             </span>
           </div>
         </div>
@@ -1052,11 +1135,11 @@ export default function ExpensesPage() {
                 </label>
                 <input
                   type="number"
-                  min={10000}
+                  min={0}
                   required
                   value={budgetInput}
                   onChange={(e) => setBudgetInput(e.target.value)}
-                  placeholder="e.g. 5000000"
+                  placeholder="e.g. 2500000"
                   className="w-full h-10 px-3.5 rounded-lg border border-neutral-300 focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617] outline-none text-xs text-neutral-900"
                 />
                 <span className="text-[11px] text-neutral-500 block">

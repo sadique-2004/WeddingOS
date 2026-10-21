@@ -36,7 +36,7 @@ import {
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Card, CardContent } from '../../components/ui/Card'
-import { galleryApi } from '../../services/apiClient'
+import { galleryApi, workspacesApi } from '../../services/apiClient'
 
 export type ModerationStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export type CeremonyCategory =
@@ -81,346 +81,10 @@ const DEFAULT_SETTINGS: GallerySettings = {
   allowGuestDownloads: true,
   maxFileSizeMB: 25,
   token: 'gal_94a7e2b810f3c88a',
-  slug: 'aisha-imran-2027'
+  slug: 'wedding-gallery'
 }
 
-const INITIAL_PHOTOS: GalleryPhoto[] = [
-  // 14 Pending Photos (The Moderation Queue)
-  {
-    id: 'photo-p1',
-    url: '/events/bride-portrait.jpg',
-    title: 'Bridal Heritage Red Zardozi Veil Portrait',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Simran Sethi',
-    uploaderRole: 'Bridal Party / Maid of Honor',
-    uploadedAt: '12 mins ago',
-    status: 'PENDING',
-    fileSize: '4.8 MB',
-    dimensions: '3840 x 2880',
-    likesCount: 14
-  },
-  {
-    id: 'photo-p2',
-    url: '/events/baraat.jpg',
-    title: 'Groom Baraat Dance with Royal Dhol Players',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Vikram Sharma',
-    uploaderRole: "Groom's Cousin",
-    uploadedAt: '25 mins ago',
-    status: 'PENDING',
-    fileSize: '5.2 MB',
-    dimensions: '4000 x 3000',
-    likesCount: 22
-  },
-  {
-    id: 'photo-p3',
-    url: '/events/haldi.jpg',
-    title: 'Candid Turmeric Paste Smearing Fun',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Pooja Mehta',
-    uploaderRole: 'Family Friend',
-    uploadedAt: '45 mins ago',
-    status: 'PENDING',
-    fileSize: '3.6 MB',
-    dimensions: '3200 x 2400',
-    likesCount: 9
-  },
-  {
-    id: 'photo-p4',
-    url: '/events/sangeet.jpg',
-    title: 'Groomsmen Bollywood Choreography Performance',
-    ceremony: 'Sangeet Gala',
-    uploaderName: 'Karan Johar Group',
-    uploaderRole: 'College Friends',
-    uploadedAt: '1 hour ago',
-    status: 'PENDING',
-    fileSize: '6.1 MB',
-    dimensions: '3840 x 2160',
-    likesCount: 18
-  },
-  {
-    id: 'photo-p5',
-    url: '/events/reception.jpg',
-    title: 'Grand Banquet Table Candlelit Decor',
-    ceremony: 'Reception Night',
-    uploaderName: 'Rohit Verma',
-    uploaderRole: 'Banquet Guest',
-    uploadedAt: '1 hour ago',
-    status: 'PENDING',
-    fileSize: '4.1 MB',
-    dimensions: '3600 x 2400',
-    likesCount: 7
-  },
-  {
-    id: 'photo-p6',
-    url: '/dashboard-hero.jpg',
-    title: 'Mandap Courtyard Golden Hour Silhouette',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Ananya Rao',
-    uploaderRole: 'Bridesmaid',
-    uploadedAt: '2 hours ago',
-    status: 'PENDING',
-    fileSize: '4.9 MB',
-    dimensions: '3840 x 2160',
-    likesCount: 12
-  },
-  {
-    id: 'photo-p7',
-    url: '/events/mehendi.jpg',
-    title: 'Henna Hands with Groom Initials Hidden',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Fatima Sheikh',
-    uploaderRole: 'Mehndi Artist Assistant',
-    uploadedAt: '2 hours ago',
-    status: 'PENDING',
-    fileSize: '3.9 MB',
-    dimensions: '3200 x 2400',
-    likesCount: 25
-  },
-  {
-    id: 'photo-p8',
-    url: '/dashboard-banner.jpg',
-    title: 'Lake Pichola Sunset View from Udaivilas Dome',
-    ceremony: 'Guest Candids',
-    uploaderName: 'Aditya Roy',
-    uploaderRole: 'Guest',
-    uploadedAt: '3 hours ago',
-    status: 'PENDING',
-    fileSize: '4.3 MB',
-    dimensions: '3840 x 2160',
-    likesCount: 16
-  },
-  {
-    id: 'photo-p9',
-    url: '/events/pheras.jpg',
-    title: 'Seven Vows (Saptapadi) Sacred Fire Pheras',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Rajesh Uncle',
-    uploaderRole: 'Paternal Uncle',
-    uploadedAt: '3 hours ago',
-    status: 'PENDING',
-    fileSize: '5.5 MB',
-    dimensions: '4000 x 2667',
-    likesCount: 31
-  },
-  {
-    id: 'photo-p10',
-    url: '/events/sangeet.jpg',
-    title: 'Bride & Groom Romantic Couple Dance',
-    ceremony: 'Sangeet Gala',
-    uploaderName: 'Meera Chawla',
-    uploaderRole: 'Guest',
-    uploadedAt: '4 hours ago',
-    status: 'PENDING',
-    fileSize: '5.0 MB',
-    dimensions: '3840 x 2160',
-    likesCount: 20
-  },
-  {
-    id: 'photo-p11',
-    url: '/events/haldi.jpg',
-    title: 'Marigold Shower on Groom and Bride',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Sameer Kapur',
-    uploaderRole: 'Friend of Groom',
-    uploadedAt: '4 hours ago',
-    status: 'PENDING',
-    fileSize: '3.4 MB',
-    dimensions: '3000 x 2000',
-    likesCount: 11
-  },
-  {
-    id: 'photo-p12',
-    url: '/events/reception.jpg',
-    title: 'Champagne Toast & Family Cheers',
-    ceremony: 'Reception Night',
-    uploaderName: 'Alia Bhatt Group',
-    uploaderRole: 'Guest',
-    uploadedAt: '5 hours ago',
-    status: 'PENDING',
-    fileSize: '4.6 MB',
-    dimensions: '3600 x 2400',
-    likesCount: 15
-  },
-  {
-    id: 'photo-p13',
-    url: '/events/bride-portrait.jpg',
-    title: 'Kundan Choker & Smiling Bride Closeup',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Kavita Verma',
-    uploaderRole: 'Maternal Aunt',
-    uploadedAt: '6 hours ago',
-    status: 'PENDING',
-    fileSize: '3.8 MB',
-    dimensions: '3200 x 2400',
-    likesCount: 19
-  },
-  {
-    id: 'photo-p14',
-    url: '/events/baraat.jpg',
-    title: 'Groom Procession Torches and Dhol Beats',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Devendra Patel',
-    uploaderRole: 'Guest',
-    uploadedAt: '6 hours ago',
-    status: 'PENDING',
-    fileSize: '4.7 MB',
-    dimensions: '3840 x 2560',
-    likesCount: 28
-  },
-
-  // Approved Photos (Live in Gallery)
-  {
-    id: 'photo-a1',
-    url: '/events/pheras.jpg',
-    title: 'Royal Mandap Sacred Vows Ceremony',
-    caption: 'Pure magic as Aisha & Imran take the holy pheras around the sacred agni.',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Studio Mewar Official',
-    uploaderRole: 'Official Wedding Photographer',
-    uploadedAt: 'Yesterday',
-    status: 'APPROVED',
-    fileSize: '6.4 MB',
-    dimensions: '4200 x 2800',
-    featured: true,
-    likesCount: 94
-  },
-  {
-    id: 'photo-a2',
-    url: '/events/sangeet.jpg',
-    title: 'High-Energy Sangeet Gala Stage Lighting',
-    caption: 'Electrifying beats and royal palace chandeliers lighting up the night.',
-    ceremony: 'Sangeet Gala',
-    uploaderName: 'Zoya Khan',
-    uploaderRole: 'Guest',
-    uploadedAt: 'Yesterday',
-    status: 'APPROVED',
-    fileSize: '5.1 MB',
-    dimensions: '3840 x 2160',
-    featured: true,
-    likesCount: 78
-  },
-  {
-    id: 'photo-a3',
-    url: '/events/haldi.jpg',
-    title: 'Yellow Sunshine Marigold Floral Bath',
-    caption: 'Pure laughter, dhol beats, and yellow turmeric blessings.',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Aarav Gupta',
-    uploaderRole: 'Brother of the Bride',
-    uploadedAt: '2 days ago',
-    status: 'APPROVED',
-    fileSize: '4.2 MB',
-    dimensions: '3200 x 2400',
-    featured: false,
-    likesCount: 65
-  },
-  {
-    id: 'photo-a4',
-    url: '/events/mehendi.jpg',
-    title: 'Intricate Rajasthani Bridal Henna Artwork',
-    caption: 'Artisan henna depicting royal palanquins and lotus flowers.',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Sunita Mehandi Art',
-    uploaderRole: 'Lead Mehndi Artisan',
-    uploadedAt: '2 days ago',
-    status: 'APPROVED',
-    fileSize: '3.7 MB',
-    dimensions: '3000 x 2250',
-    featured: true,
-    likesCount: 88
-  },
-  {
-    id: 'photo-a5',
-    url: '/events/reception.jpg',
-    title: 'Royal Couple Grand Stage Entrance',
-    caption: 'Aisha and Imran greeting hundreds of beloved family and friends.',
-    ceremony: 'Reception Night',
-    uploaderName: 'Studio Mewar Official',
-    uploaderRole: 'Official Photographer',
-    uploadedAt: '3 days ago',
-    status: 'APPROVED',
-    fileSize: '5.8 MB',
-    dimensions: '4000 x 2667',
-    featured: true,
-    likesCount: 112
-  },
-  {
-    id: 'photo-a6',
-    url: '/events/bride-portrait.jpg',
-    title: 'Emerald Kundan Radiance Closeup',
-    caption: 'The radiant smile of the Maharani bride before the baraat arrival.',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Natasha Hair & Makeup',
-    uploaderRole: 'Stylist Team',
-    uploadedAt: '3 days ago',
-    status: 'APPROVED',
-    fileSize: '4.5 MB',
-    dimensions: '3600 x 2700',
-    featured: false,
-    likesCount: 82
-  },
-  {
-    id: 'photo-a7',
-    url: '/events/baraat.jpg',
-    title: 'Royal Procession with Fireworks & Brass Band',
-    caption: 'The groom arriving with sheer royalty and celebration.',
-    ceremony: 'Baraat & Pheras',
-    uploaderName: 'Rohan Singhania',
-    uploaderRole: 'Best Man',
-    uploadedAt: '3 days ago',
-    status: 'APPROVED',
-    fileSize: '5.3 MB',
-    dimensions: '3840 x 2560',
-    featured: false,
-    likesCount: 71
-  },
-  {
-    id: 'photo-a8',
-    url: '/dashboard-banner.jpg',
-    title: 'Fairytale Sunset over Lake Pichola Courtyard',
-    caption: 'Golden hour lights mirroring off the serene waters of Udaipur.',
-    ceremony: 'Guest Candids',
-    uploaderName: 'Manish Tandon',
-    uploaderRole: 'Guest',
-    uploadedAt: '4 days ago',
-    status: 'APPROVED',
-    fileSize: '4.8 MB',
-    dimensions: '3840 x 2160',
-    featured: false,
-    likesCount: 59
-  },
-
-  // Rejected Photos (Moderation History)
-  {
-    id: 'photo-r1',
-    url: '/events/haldi.jpg',
-    title: 'Extremely Blurry Dancing Shot',
-    ceremony: 'Haldi & Mehndi',
-    uploaderName: 'Unknown Guest',
-    uploaderRole: 'Guest',
-    uploadedAt: 'Yesterday',
-    status: 'REJECTED',
-    rejectionReason: 'Blurry motion / out of focus',
-    fileSize: '2.1 MB',
-    dimensions: '1920 x 1080',
-    likesCount: 0
-  },
-  {
-    id: 'photo-r2',
-    url: '/events/sangeet.jpg',
-    title: 'Accidental Pocket Video Screenshot',
-    ceremony: 'Sangeet Gala',
-    uploaderName: 'Table 4 Guest',
-    uploaderRole: 'Guest',
-    uploadedAt: '2 days ago',
-    status: 'REJECTED',
-    rejectionReason: 'Accidental low-light dark shot',
-    fileSize: '1.4 MB',
-    dimensions: '1280 x 720',
-    likesCount: 0
-  }
-]
+const INITIAL_PHOTOS: GalleryPhoto[] = []
 
 export default function GalleryPage() {
   const [photos, setPhotos] = useState<GalleryPhoto[]>(() => {
@@ -442,6 +106,50 @@ export default function GalleryPage() {
     }
     return DEFAULT_SETTINGS
   })
+
+  const [wedding, setWedding] = useState({
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
+  })
+
+  useEffect(() => {
+    const loadWedding = async () => {
+      try {
+        const stored = localStorage.getItem('weddingos_active_wedding')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setWedding({
+            brideName: parsed.brideName || '',
+            groomName: parsed.groomName || '',
+            weddingDate: parsed.weddingDate || '',
+            locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const active = await workspacesApi.getActive(1)
+        if (active) {
+          setWedding({
+            brideName: active.brideName || '',
+            groomName: active.groomName || '',
+            weddingDate: active.weddingDate || '',
+            locationName: active.venueName || active.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    loadWedding()
+    window.addEventListener('weddingos_wedding_updated', loadWedding)
+    return () => window.removeEventListener('weddingos_wedding_updated', loadWedding)
+  }, [])
 
   // Tab State: 'PENDING' | 'APPROVED' | 'REJECTED' | 'SETTINGS'
   const [activeTab, setActiveTab] = useState<'PENDING' | 'APPROVED' | 'REJECTED' | 'SETTINGS'>('PENDING')
@@ -1571,10 +1279,12 @@ export default function GalleryPage() {
                       Wedding Memories
                     </span>
                     <h4 className="font-cormorant text-2xl font-bold text-white">
-                      Aisha &amp; Imran
+                      {wedding.brideName && wedding.groomName
+                        ? `${wedding.brideName} & ${wedding.groomName}`
+                        : wedding.brideName || wedding.groomName || 'Wedding Memories'}
                     </h4>
                     <p className="text-[10px] text-white/80 font-sans">
-                      February 18, 2027 &bull; Udaipur
+                      {wedding.weddingDate || 'Date to be announced'}{wedding.locationName ? ` • ${wedding.locationName}` : ''}
                     </p>
                   </div>
 

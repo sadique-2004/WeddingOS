@@ -17,7 +17,7 @@ import WebsiteStudioPage from '../../pages/website/WebsiteStudioPage'
 import GalleryPage from '../../pages/gallery/GalleryPage'
 import CheckInPage from '../../pages/check-in/CheckInPage'
 import MembersPage from '../../pages/members/MembersPage'
-import SettingsPage from '../../pages/settings/SettingsPage'
+import ProfilePage from '../../pages/profile/ProfilePage'
 import GuestInvitePage from '../../pages/invite/GuestInvitePage'
 import PublicWeddingPage from '../../pages/public/PublicWeddingPage'
 import PublicGalleryPage from '../../pages/public/PublicGalleryPage'
@@ -140,8 +140,12 @@ export const router = createBrowserRouter([
         element: <MembersPage />,
       },
       {
+        path: 'profile',
+        element: <ProfilePage />,
+      },
+      {
         path: 'settings',
-        element: <SettingsPage />,
+        element: <Navigate to="/app/profile" replace />,
       },
     ],
   },

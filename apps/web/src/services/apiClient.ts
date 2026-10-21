@@ -1,4 +1,8 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080/api/v1'
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL ||
+  (typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1'
+    ? 'https://weddingos-api.onrender.com/api/v1'
+    : 'http://localhost:8080/api/v1')
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`
@@ -88,10 +92,17 @@ export const workspaceApi = {
       method: 'PUT',
       body: JSON.stringify(details),
     }),
-  reset: (weddingId = 1) =>
-    request<WorkspaceSummary>(`/workspaces/reset?weddingId=${weddingId}`, {
-      method: 'POST',
-    }),
+  reset: async (weddingId = 1) => {
+    try {
+      return await request<WorkspaceSummary>(`/workspaces/${weddingId}/reset`, {
+        method: 'POST',
+      })
+    } catch {
+      return await request<WorkspaceSummary>(`/workspaces/reset?weddingId=${weddingId}`, {
+        method: 'POST',
+      })
+    }
+  },
 }
 export const workspacesApi = workspaceApi
 

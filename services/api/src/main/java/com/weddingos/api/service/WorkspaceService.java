@@ -2,6 +2,7 @@ package com.weddingos.api.service;
 
 import com.weddingos.api.model.*;
 import com.weddingos.api.repository.*;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -26,6 +27,7 @@ public class WorkspaceService {
     private final GalleryPhotoRepository galleryPhotoRepository;
     private final WeddingWebsiteRepository websiteRepository;
     private final CheckInLogRepository checkInLogRepository;
+    private final JdbcTemplate jdbcTemplate;
 
     public WorkspaceService(WeddingRepository weddingRepository,
                             WeddingSlugRepository slugRepository,
@@ -38,7 +40,8 @@ public class WorkspaceService {
                             VendorContactRepository vendorRepository,
                             GalleryPhotoRepository galleryPhotoRepository,
                             WeddingWebsiteRepository websiteRepository,
-                            CheckInLogRepository checkInLogRepository) {
+                            CheckInLogRepository checkInLogRepository,
+                            JdbcTemplate jdbcTemplate) {
         this.weddingRepository = weddingRepository;
         this.slugRepository = slugRepository;
         this.userRepository = userRepository;
@@ -51,6 +54,25 @@ public class WorkspaceService {
         this.galleryPhotoRepository = galleryPhotoRepository;
         this.websiteRepository = websiteRepository;
         this.checkInLogRepository = checkInLogRepository;
+        this.jdbcTemplate = jdbcTemplate;
+    }
+
+    @jakarta.annotation.PostConstruct
+    public void ensureSchemaCompatibility() {
+        if (jdbcTemplate != null) {
+            try {
+                jdbcTemplate.execute("ALTER TABLE weddings MODIFY COLUMN wedding_date DATE NULL");
+            } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE weddings MODIFY COLUMN bride_name VARCHAR(120) NULL");
+            } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE weddings MODIFY COLUMN groom_name VARCHAR(120) NULL");
+            } catch (Exception ignored) {}
+            try {
+                jdbcTemplate.execute("ALTER TABLE weddings MODIFY COLUMN city VARCHAR(120) NULL");
+            } catch (Exception ignored) {}
+        }
     }
 
     @Transactional
@@ -92,8 +114,11 @@ public class WorkspaceService {
         Map<String, Object> summary = new HashMap<>();
         summary.put("id", wedding.getId());
         summary.put("brideName", wedding.getBrideName() != null ? wedding.getBrideName() : "");
-        summary.put("groomName", wedding.getGroomName() != null ? wedding.getGroomName() : "");
-        summary.put("weddingDate", wedding.getWeddingDate());
+        LocalDate date = wedding.getWeddingDate();
+        if (date != null && date.getYear() == 2099) {
+            date = null;
+        }
+        summary.put("weddingDate", date);
         summary.put("city", wedding.getCity() != null ? wedding.getCity() : "");
         summary.put("venueName", wedding.getVenueName() != null ? wedding.getVenueName() : "");
         summary.put("slug", slug);
@@ -203,27 +228,27 @@ public class WorkspaceService {
 
         Long activeId = wedding.getId();
 
-        // 1. Delete all related events
-        var events = eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(activeId);
-        eventRepository.deleteAll(events);
-
-        // 2. Delete all tasks
-        var tasks = taskRepository.findByWeddingIdOrderByCreatedAtDesc(activeId);
-        taskRepository.deleteAll(tasks);
-
-        // 3. Delete all expenses
-        var expenses = expenseRepository.findByWeddingIdOrderByExpenseDateDesc(activeId);
-        expenseRepository.deleteAll(expenses);
-
-        // 4. Delete all vendors
-        var vendors = vendorRepository.findByWeddingIdOrderByBusinessNameAsc(activeId);
-        vendorRepository.deleteAll(vendors);
-
-        // 5. Delete all check-in logs
+        // 1. Delete all check-in logs first (foreign key to invitations)
         var logs = checkInLogRepository.findByWeddingIdOrderByScannedAtDesc(activeId);
         checkInLogRepository.deleteAll(logs);
 
-        // 6. Delete all invitations
+        // 2. Delete all expenses (foreign key to events and vendors)
+        var expenses = expenseRepository.findByWeddingIdOrderByExpenseDateDesc(activeId);
+        expenseRepository.deleteAll(expenses);
+
+        // 3. Delete all tasks
+        var tasks = taskRepository.findByWeddingIdOrderByCreatedAtDesc(activeId);
+        taskRepository.deleteAll(tasks);
+
+        // 4. Delete all related events (now clear to delete)
+        var events = eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(activeId);
+        eventRepository.deleteAll(events);
+
+        // 5. Delete all vendors (now clear to delete)
+        var vendors = vendorRepository.findByWeddingIdOrderByBusinessNameAsc(activeId);
+        vendorRepository.deleteAll(vendors);
+
+        // 6. Delete all invitations (now clear to delete)
         var invitations = invitationRepository.findByWeddingIdOrderByDisplayNameAsc(activeId);
         invitationRepository.deleteAll(invitations);
 
@@ -239,15 +264,23 @@ public class WorkspaceService {
             websiteRepository.save(site);
         });
 
-        // 9. Reset wedding couple details
+        // 9. Delete all leftover memberships (clean slate)
+        var memberships = membershipRepository.findByWeddingId(activeId);
+        membershipRepository.deleteAll(memberships);
+
         wedding.setBrideName("");
         wedding.setGroomName("");
-        wedding.setWeddingDate(null);
         wedding.setCity("");
         wedding.setVenueName("");
         wedding.setTotalBudgetTarget(BigDecimal.ZERO);
         wedding.setExpectedGuestCapacity(0);
-        weddingRepository.save(wedding);
+        try {
+            wedding.setWeddingDate(null);
+            weddingRepository.saveAndFlush(wedding);
+        } catch (Exception e) {
+            wedding.setWeddingDate(LocalDate.of(2099, 1, 1));
+            weddingRepository.saveAndFlush(wedding);
+        }
 
         // 10. Reset slug to clean default
         slugRepository.findByWeddingId(activeId).ifPresent(ws -> {

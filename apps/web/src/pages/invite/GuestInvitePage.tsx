@@ -13,6 +13,7 @@ import {
 import QRCode from 'qrcode'
 import { resolveInvitation, getInvitations, saveInvitations } from '../../services/invitationStore'
 import type { FamilyInvitation } from '../../types/invitation'
+import { workspacesApi } from '../../services/apiClient'
 
 export default function GuestInvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -23,11 +24,11 @@ export default function GuestInvitePage() {
   const [rsvpSavedNotice, setRsvpSavedNotice] = useState(false)
 
   // Active Wedding Details
-  const [wedding] = useState({
-    brideName: 'Aisha',
-    groomName: 'Imran',
-    weddingDate: 'February 18, 2027',
-    locationName: 'Palace Grounds, Bengaluru, Karnataka',
+  const [wedding, setWedding] = useState({
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
   })
 
   // Form State for RSVP
@@ -36,6 +37,39 @@ export default function GuestInvitePage() {
   const [dietaryInput, setDietaryInput] = useState<string>('')
 
   useEffect(() => {
+    const loadWedding = async () => {
+      try {
+        const stored = localStorage.getItem('weddingos_active_wedding')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setWedding({
+            brideName: parsed.brideName || '',
+            groomName: parsed.groomName || '',
+            weddingDate: parsed.weddingDate || '',
+            locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const active = await workspacesApi.getActive(1)
+        if (active) {
+          setWedding({
+            brideName: active.brideName || '',
+            groomName: active.groomName || '',
+            weddingDate: active.weddingDate || '',
+            locationName: active.venueName || active.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    loadWedding()
+
     if (!token) return
 
     const found = resolveInvitation(token)
@@ -153,7 +187,9 @@ export default function GuestInvitePage() {
             </p>
 
             <h1 className="font-cormorant text-4xl sm:text-5xl lg:text-6xl font-bold text-[#4b030e] tracking-tight">
-              {wedding.brideName} &amp; {wedding.groomName}
+              {wedding.brideName && wedding.groomName
+                ? `${wedding.brideName} & ${wedding.groomName}`
+                : wedding.brideName || wedding.groomName || 'The Sacred Wedding'}
             </h1>
 
             <p className="text-sm sm:text-base text-neutral-600 max-w-lg mx-auto">
@@ -172,18 +208,18 @@ export default function GuestInvitePage() {
             {/* Date & Location Pill Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-md mx-auto pt-4 text-xs text-left">
               <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-[#faf9f6] border border-[#e6bd81]/50">
-                <Calendar className="w-5 h-5 text-[#b88444] shrink-0" />
+                <Calendar className="w-5 h-5 text-[#b88444]" shrink-0 />
                 <div>
                   <span className="font-bold text-[#4b030e] block">Wedding Date</span>
-                  <span className="text-neutral-500">{wedding.weddingDate}</span>
+                  <span className="text-neutral-500">{wedding.weddingDate || 'To Be Announced'}</span>
                 </div>
               </div>
 
               <div className="flex items-center gap-3 p-3.5 rounded-2xl bg-[#faf9f6] border border-[#e6bd81]/50">
-                <MapPin className="w-5 h-5 text-[#b88444] shrink-0" />
+                <MapPin className="w-5 h-5 text-[#b88444]" shrink-0 />
                 <div>
                   <span className="font-bold text-[#4b030e] block">Venue</span>
-                  <span className="text-neutral-500 truncate max-w-[150px]">{wedding.locationName}</span>
+                  <span className="text-neutral-500 truncate max-w-[150px]">{wedding.locationName || 'Venue Details Soon'}</span>
                 </div>
               </div>
             </div>

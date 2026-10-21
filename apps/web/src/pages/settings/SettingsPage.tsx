@@ -115,13 +115,15 @@ export default function SettingsPage() {
 
   // Calculate days remaining
   const calculateDaysRemaining = () => {
+    if (!settings.weddingDate) return null
     try {
       const target = new Date(settings.weddingDate).getTime()
+      if (isNaN(target)) return null
       const now = new Date().getTime()
       const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24))
       return diff > 0 ? diff : 0
     } catch {
-      return 120
+      return null
     }
   }
 
@@ -259,7 +261,7 @@ export default function SettingsPage() {
               </span>
               <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-[#faf9f6] text-[#6f0617] border border-[#e6bd81]">
                 <Clock className="w-3 h-3 text-[#b88444]" />
-                {daysRemaining} Days Until Wedding
+                {daysRemaining !== null ? `${daysRemaining} Days Until Wedding` : 'Date Not Set'}
               </span>
             </div>
 
@@ -299,15 +301,19 @@ export default function SettingsPage() {
           <div className="p-3.5 rounded-xl bg-[#faf9f6] border border-[#e6bd81]/40">
             <span className="text-[11px] font-medium text-neutral-600 block">Couple Names</span>
             <span className="font-cormorant text-lg font-bold text-[#4b030e] truncate block mt-0.5">
-              {settings.brideName} &amp; {settings.groomName}
+              {settings.brideName && settings.groomName
+                ? `${settings.brideName} & ${settings.groomName}`
+                : settings.brideName || settings.groomName || 'Not Configured'}
             </span>
             <span className="text-[10px] text-neutral-500 block">Workspace Owners</span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-[#faf9f6] border border-[#e6bd81]/40">
             <span className="text-[11px] font-medium text-neutral-600 block">Wedding Date</span>
-            <span className="font-bold text-sm text-[#4b030e] block mt-0.5">{settings.weddingDate}</span>
-            <span className="text-[10px] text-neutral-500 block">{daysRemaining} days remaining</span>
+            <span className="font-bold text-sm text-[#4b030e] block mt-0.5">{settings.weddingDate || 'Date Not Set'}</span>
+            <span className="text-[10px] text-neutral-500 block">
+              {daysRemaining !== null ? `${daysRemaining} days remaining` : 'Configure Date Below'}
+            </span>
           </div>
 
           <div className="p-3.5 rounded-xl bg-[#faf9f6] border border-[#e6bd81]/40">
@@ -472,7 +478,7 @@ export default function SettingsPage() {
                   type="text"
                   value={settings.title}
                   onChange={(e) => setSettings({ ...settings, title: e.target.value })}
-                  placeholder="e.g. Aisha & Imran's Royal Wedding"
+                  placeholder="e.g. Royal Wedding Celebration"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs font-medium text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
                 />
               </div>

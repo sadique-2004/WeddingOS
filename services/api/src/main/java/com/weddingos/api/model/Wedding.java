@@ -17,16 +17,16 @@ public class Wedding {
     @JoinColumn(name = "owner_user_id", nullable = false)
     private AppUser ownerUser;
 
-    @Column(name = "bride_name", nullable = false, length = 120)
+    @Column(name = "bride_name", length = 120)
     private String brideName;
 
-    @Column(name = "groom_name", nullable = false, length = 120)
+    @Column(name = "groom_name", length = 120)
     private String groomName;
 
-    @Column(name = "wedding_date", nullable = false)
+    @Column(name = "wedding_date")
     private LocalDate weddingDate;
 
-    @Column(nullable = false, length = 120)
+    @Column(length = 120)
     private String city;
 
     @Column(name = "venue_name", length = 255)

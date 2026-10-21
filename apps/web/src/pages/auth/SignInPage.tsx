@@ -359,7 +359,7 @@ export default function SignInPage() {
                     className="h-9 px-3 rounded-lg bg-[#faf7f2] border border-[#e6bd81]/50 hover:bg-[#f5ecdd] text-[#4b030e] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-[#b88444]" />
-                    <span>Aisha (Bride)</span>
+                    <span>Demo (Bride)</span>
                   </button>
                   <button
                     type="button"
@@ -370,7 +370,7 @@ export default function SignInPage() {
                     className="h-9 px-3 rounded-lg bg-[#faf7f2] border border-[#e6bd81]/50 hover:bg-[#f5ecdd] text-[#4b030e] text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-2xs cursor-pointer"
                   >
                     <Sparkles className="w-3.5 h-3.5 text-[#b88444]" />
-                    <span>Imran (Groom)</span>
+                    <span>Demo (Groom)</span>
                   </button>
                 </div>
               </div>

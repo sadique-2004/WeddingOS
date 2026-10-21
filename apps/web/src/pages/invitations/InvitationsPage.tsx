@@ -280,7 +280,7 @@ export default function InvitationsPage() {
             className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-[#faf9f6] border border-[#e6bd81] text-[#4b030e] text-xs font-semibold hover:bg-[#f6ebd9] transition-all cursor-pointer shadow-2xs"
           >
             <QrCode className="w-3.5 h-3.5 text-[#b88444]" />
-            <span>Reception Desk Check-In</span>
+            <span>Check-In</span>
           </Link>
 
           <button
@@ -701,11 +701,10 @@ export default function InvitationsPage() {
                             : [...formData.ceremoniesAllowed, ceremony]
                           setFormData({ ...formData, ceremoniesAllowed: updated })
                         }}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${
-                          isChecked
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer ${isChecked
                             ? 'bg-[#6f0617] border-[#6f0617] text-white shadow-2xs font-semibold'
                             : 'bg-neutral-50 border-neutral-200 text-neutral-600 hover:bg-neutral-100'
-                        }`}
+                          }`}
                       >
                         {isChecked ? `✓ ${ceremony}` : `+ ${ceremony}`}
                       </button>

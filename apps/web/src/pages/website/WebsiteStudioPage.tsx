@@ -648,7 +648,7 @@ export default function WebsiteStudioPage() {
                       })
                     }
                     className="flex-1 px-3 py-2 text-xs font-mono focus:outline-none"
-                    placeholder="aisha-and-imran"
+                    placeholder="our-wedding"
                   />
                 </div>
                 <p className="text-[11px] text-neutral-400">

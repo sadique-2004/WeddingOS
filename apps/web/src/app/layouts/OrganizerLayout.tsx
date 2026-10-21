@@ -13,6 +13,7 @@ import {
   QrCode,
   ShieldAlert,
   Settings,
+  User,
   Menu,
   X,
   Clock,
@@ -23,6 +24,7 @@ import {
 } from 'lucide-react'
 
 import { getLocalAuthSession, clearLocalAuthSession } from '../../services/authService'
+import { workspacesApi } from '../../services/apiClient'
 
 export default function OrganizerLayout() {
   const navigate = useNavigate()
@@ -32,24 +34,47 @@ export default function OrganizerLayout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false) // Initially collapsed as requested
   const [wedding, setWedding] = useState({
-    brideName: 'Aisha',
-    groomName: 'Imran',
-    weddingDate: '2027-02-18',
-    locationName: 'Bengaluru, Karnataka',
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
   })
 
-  // Load from localStorage if available & listen for updates
+  // Load from localStorage if available, fetch from database & listen for updates
   useEffect(() => {
-    const loadWedding = () => {
+    const loadWedding = async () => {
       try {
         const stored = localStorage.getItem('weddingos_active_wedding')
         if (stored) {
-          setWedding(JSON.parse(stored))
+          const parsed = JSON.parse(stored)
+          setWedding({
+            brideName: parsed.brideName || '',
+            groomName: parsed.groomName || '',
+            weddingDate: parsed.weddingDate || '',
+            locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
+
+      try {
+        const active = await workspacesApi.getActive(1)
+        if (active) {
+          const updated = {
+            brideName: active.brideName || '',
+            groomName: active.groomName || '',
+            weddingDate: active.weddingDate || '',
+            locationName: active.venueName || active.city || '',
+          }
+          setWedding(updated)
+          localStorage.setItem('weddingos_active_wedding', JSON.stringify(updated))
         }
       } catch {
         // ignore
       }
     }
+
     loadWedding()
     window.addEventListener('weddingos_wedding_updated', loadWedding)
     return () => window.removeEventListener('weddingos_wedding_updated', loadWedding)
@@ -57,17 +82,25 @@ export default function OrganizerLayout() {
 
   // Calculate days remaining
   const calculateDaysRemaining = () => {
+    if (!wedding.weddingDate) return null
     try {
-      const target = new Date(wedding.weddingDate).getTime()
+      const target = new Date(
+        wedding.weddingDate.includes('T') ? wedding.weddingDate : `${wedding.weddingDate}T10:00:00`
+      ).getTime()
+      if (isNaN(target)) return null
       const now = new Date().getTime()
       const diff = Math.ceil((target - now) / (1000 * 60 * 60 * 24))
       return diff > 0 ? diff : 0
     } catch {
-      return 124
+      return null
     }
   }
 
   const daysRemaining = calculateDaysRemaining()
+  const coupleTitle =
+    wedding.brideName && wedding.groomName
+      ? `${wedding.brideName} & ${wedding.groomName}`
+      : wedding.brideName || wedding.groomName || 'My Wedding Workspace'
 
   const navItems = [
     { label: 'Dashboard', to: '/app/dashboard', icon: <LayoutDashboard className="w-5 h-5 shrink-0" /> },
@@ -80,7 +113,7 @@ export default function OrganizerLayout() {
     { label: 'Photo Gallery', to: '/app/gallery', icon: <Camera className="w-5 h-5 shrink-0" /> },
     { label: 'Family Check-In', to: '/app/check-in', icon: <QrCode className="w-5 h-5 shrink-0" /> },
     { label: 'Team Members', to: '/app/members', icon: <ShieldAlert className="w-5 h-5 shrink-0" /> },
-    { label: 'Settings', to: '/app/settings', icon: <Settings className="w-5 h-5 shrink-0" /> },
+    { label: 'Wedding Profile', to: '/app/profile', icon: <User className="w-5 h-5 shrink-0" /> },
   ]
 
   const handleSignOut = async () => {
@@ -149,16 +182,22 @@ export default function OrganizerLayout() {
             <div className="p-3.5 mx-3.5 my-3 rounded-xl bg-gradient-to-r from-[#4b030e] to-[#6f0617] text-white shadow-xs border border-[#b88444]/40 shrink-0">
               <div className="flex items-center justify-between text-[10px] text-[#e6bd81] uppercase tracking-wider font-semibold mb-0.5">
                 <span>Active Workspace</span>
-                <span className="flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-full text-white text-[10px]">
-                  <Clock className="w-3 h-3 text-[#e6bd81]" />
-                  {daysRemaining} Days
-                </span>
+                {daysRemaining !== null ? (
+                  <span className="flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-full text-white text-[10px]">
+                    <Clock className="w-3 h-3 text-[#e6bd81]" />
+                    {daysRemaining} Days
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 bg-white/15 px-2 py-0.5 rounded-full text-white/80 text-[10px]">
+                    Date Not Set
+                  </span>
+                )}
               </div>
               <h4 className="font-cormorant text-lg font-normal leading-tight truncate">
-                {wedding.brideName} &amp; {wedding.groomName}
+                {coupleTitle}
               </h4>
               <p className="text-[10px] text-white/75 truncate mt-0.5">
-                {wedding.locationName}
+                {wedding.locationName || 'Location Not Set'}
               </p>
             </div>
           )}
@@ -290,10 +329,12 @@ export default function OrganizerLayout() {
               </div>
 
               <div className="p-3 rounded-xl bg-[#4b030e] text-white">
-                <span className="text-[10px] text-[#e6bd81] uppercase font-semibold block">
-                  {wedding.brideName} &amp; {wedding.groomName}
+                <span className="text-[10px] text-[#e6bd81] uppercase font-semibold block truncate">
+                  {coupleTitle}
                 </span>
-                <span className="text-xs text-white/80">{daysRemaining} Days to Wedding</span>
+                <span className="text-xs text-white/80">
+                  {daysRemaining !== null ? `${daysRemaining} Days to Wedding` : 'Date Not Set'}
+                </span>
               </div>
 
               <nav className="space-y-1">
@@ -341,12 +382,21 @@ export default function OrganizerLayout() {
             </button>
 
             <div className="flex items-center gap-2">
-              <span className="font-cormorant text-xl sm:text-2xl font-bold text-[#4b030e] tracking-tight">
-                {wedding.brideName} &amp; {wedding.groomName}
+              <span className="font-cormorant text-xl sm:text-2xl font-bold text-[#4b030e] tracking-tight truncate max-w-[200px] sm:max-w-md">
+                {coupleTitle}
               </span>
-              <span className="hidden sm:inline-block text-xs px-2.5 py-0.5 rounded-full bg-[#fbe6e9] text-[#6f0617] font-semibold border border-[#f8cfd5]">
-                {daysRemaining} Days Left
-              </span>
+              {daysRemaining !== null ? (
+                <span className="hidden sm:inline-block text-xs px-2.5 py-0.5 rounded-full bg-[#fbe6e9] text-[#6f0617] font-semibold border border-[#f8cfd5]">
+                  {daysRemaining} Days Left
+                </span>
+              ) : (
+                <Link
+                  to="/app/profile"
+                  className="hidden sm:inline-block text-[11px] px-2.5 py-0.5 rounded-full bg-[#faf4ec] text-[#b88444] font-semibold border border-[#e6bd81]/60 hover:bg-[#f6ebd9]"
+                >
+                  Setup Wedding Date
+                </Link>
+              )}
             </div>
           </div>
 

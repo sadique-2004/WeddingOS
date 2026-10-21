@@ -26,6 +26,10 @@ import {
   Clock,
   Send,
   CheckCircle2,
+  Key,
+  Eye,
+  EyeOff,
+  RefreshCw,
 } from 'lucide-react'
 import type {
   WeddingMembership,
@@ -42,11 +46,12 @@ import {
   getOrganizerInvitations,
   updateMemberRoleAndPermissions,
   removeMember,
-  inviteOrganizer,
+  assignTeamMember,
   revokeInvitation,
   acceptInvitation,
-  resetMembershipDemoData,
+  syncMembersFromBackend,
 } from '../../services/membershipStore'
+import { getLocalAuthSession } from '../../services/authService'
 
 const MODULE_DEFINITIONS: {
   key: WorkspaceModuleKey
@@ -65,14 +70,35 @@ const MODULE_DEFINITIONS: {
 ]
 
 export default function MembersPage() {
-  const { user } = useUser()
-  const currentUserName = user?.fullName || 'Aisha Sharma'
+  const { user: clerkUser } = useUser()
+  const localUser = getLocalAuthSession()
+
+  // Resolve currently authenticated user
+  const activeUser = clerkUser
+    ? {
+        id: clerkUser.id,
+        fullName: clerkUser.fullName || clerkUser.primaryEmailAddress?.emailAddress?.split('@')[0] || 'Main Admin',
+        email: clerkUser.primaryEmailAddress?.emailAddress || '',
+        role: 'ADMIN' as WorkspaceRole,
+        avatarUrl: clerkUser.imageUrl,
+      }
+    : localUser
+    ? {
+        id: localUser.id,
+        fullName: localUser.fullName,
+        email: localUser.email,
+        role: localUser.role as WorkspaceRole,
+        avatarUrl: localUser.avatarUrl,
+      }
+    : null
+
+  const currentUserName = activeUser?.fullName || 'Workspace Admin'
 
   const [wedding, setWedding] = useState({
-    brideName: 'Aisha',
-    groomName: 'Imran',
-    weddingDate: '2027-02-18',
-    locationName: 'Bengaluru, Karnataka',
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
   })
 
   // Store data
@@ -88,21 +114,30 @@ export default function MembersPage() {
   const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [copiedToken, setCopiedToken] = useState<string | null>(null)
+  const [copiedCreds, setCopiedCreds] = useState(false)
 
   // Modals
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false)
   const [editingMember, setEditingMember] = useState<WeddingMembership | null>(null)
   const [memberToDelete, setMemberToDelete] = useState<WeddingMembership | null>(null)
-  const [createdInviteResult, setCreatedInviteResult] = useState<OrganizerInvitation | null>(null)
+  const [createdCredentials, setCreatedCredentials] = useState<{
+    name: string
+    email: string
+    password: string
+    role: WorkspaceRole
+    title?: string
+  } | null>(null)
 
   // Invite Form State
   const [inviteForm, setInviteForm] = useState({
     targetEmail: '',
     targetName: '',
+    password: '',
     title: '',
     role: 'ORGANIZER' as WorkspaceRole,
     permissions: { ...DEFAULT_ORGANIZER_PERMISSIONS },
   })
+  const [showInvitePassword, setShowInvitePassword] = useState(false)
 
   // Edit Member Form State
   const [editForm, setEditForm] = useState({
@@ -112,7 +147,8 @@ export default function MembersPage() {
   })
 
   const refreshData = () => {
-    setMembers(getMembers())
+    const list = getMembers(undefined, activeUser || undefined)
+    setMembers(list)
     setInvitations(getOrganizerInvitations())
   }
 
@@ -125,16 +161,21 @@ export default function MembersPage() {
     }
 
     refreshData()
+    syncMembersFromBackend().then(() => refreshData()).catch(() => {})
 
     const handleUpdate = () => refreshData()
     window.addEventListener('weddingos_members_updated', handleUpdate)
-    return () => window.removeEventListener('weddingos_members_updated', handleUpdate)
-  }, [])
+    window.addEventListener('weddingos_auth_changed', handleUpdate)
+    return () => {
+      window.removeEventListener('weddingos_members_updated', handleUpdate)
+      window.removeEventListener('weddingos_auth_changed', handleUpdate)
+    }
+  }, [clerkUser, localUser?.email])
 
   const showSuccess = (msg: string) => {
     setSuccessMessage(msg)
     setErrorMessage(null)
-    setTimeout(() => setSuccessMessage(null), 4000)
+    setTimeout(() => setSuccessMessage(null), 5000)
   }
 
   const showError = (msg: string) => {
@@ -143,35 +184,42 @@ export default function MembersPage() {
     setTimeout(() => setErrorMessage(null), 6000)
   }
 
-  // Handle Invite Form Submission
+  // Handle Assigning Team Member with Email & Password
   const handleInviteSubmit = (e: FormEvent) => {
     e.preventDefault()
     try {
-      const invite = inviteOrganizer(
-        inviteForm.targetEmail,
-        inviteForm.targetName,
-        inviteForm.role,
-        inviteForm.role === 'ADMIN' ? ALL_PERMISSIONS_ENABLED : inviteForm.permissions,
-        currentUserName,
-        user?.id || 'current-admin',
-        inviteForm.title
-      )
+      const newMember = assignTeamMember({
+        fullName: inviteForm.targetName,
+        email: inviteForm.targetEmail,
+        password: inviteForm.password,
+        role: inviteForm.role,
+        title: inviteForm.title,
+        modulePermissions: inviteForm.role === 'ADMIN' ? ALL_PERMISSIONS_ENABLED : inviteForm.permissions,
+      })
 
       refreshData()
       setIsInviteModalOpen(false)
-      setCreatedInviteResult(invite)
-      showSuccess(`Invitation dispatched to "${invite.targetEmail}" successfully!`)
+      setCreatedCredentials({
+        name: newMember.fullName,
+        email: newMember.email,
+        password: inviteForm.password,
+        role: newMember.role,
+        title: newMember.title,
+      })
+      showSuccess(`Assigned "${newMember.fullName}" as ${newMember.role}! Login credentials are created.`)
 
       // Reset form
       setInviteForm({
         targetEmail: '',
         targetName: '',
+        password: '',
         title: '',
         role: 'ORGANIZER',
         permissions: { ...DEFAULT_ORGANIZER_PERMISSIONS },
       })
+      setShowInvitePassword(false)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'Failed to send invitation'
+      const msg = err instanceof Error ? err.message : 'Failed to assign team member'
       showError(msg)
     }
   }
@@ -251,6 +299,15 @@ export default function MembersPage() {
     setTimeout(() => setCopiedToken(null), 2500)
   }
 
+  // Copy created credentials
+  const handleCopyCredentials = () => {
+    if (!createdCredentials) return
+    const text = `WeddingOS Workspace Access Credentials\nLogin URL: ${window.location.origin}/sign-in\nEmail: ${createdCredentials.email}\nPassword: ${createdCredentials.password}\nRole: ${createdCredentials.role}`
+    navigator.clipboard.writeText(text)
+    setCopiedCreds(true)
+    setTimeout(() => setCopiedCreds(false), 2500)
+  }
+
   // Counts & stats
   const totalMembers = members.length
   const adminCount = members.filter((m) => m.role === 'ADMIN').length
@@ -301,8 +358,8 @@ export default function MembersPage() {
               Organizer Team &amp; Role Permissions
             </h1>
             <p className="text-sm text-[#4b030e]/80 mt-1 max-w-2xl">
-              Manage workspace access for <strong>{wedding.brideName} &amp; {wedding.groomName}’s</strong> wedding.
-              Assign Admins, delegate coordinator responsibilities, and configure module-by-module permissions.
+              Workspace access for <strong>{wedding.brideName || 'Wedding'} &amp; {wedding.groomName}’s</strong> planning team.
+              Assign Co-Organizers or Admins with their email and password so they can log in to this dashboard.
             </p>
           </div>
 
@@ -310,15 +367,14 @@ export default function MembersPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <button
               onClick={() => {
-                resetMembershipDemoData()
-                refreshData()
-                showSuccess('Reset team memberships to default demo state.')
+                syncMembersFromBackend().then(() => refreshData()).catch(() => refreshData())
+                showSuccess('Team roster synchronized.')
               }}
               className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold text-[#4b030e] bg-[#faf9f6] border border-[#e6bd81] hover:bg-[#f6ebd9] transition-all cursor-pointer shadow-xs"
-              title="Reset team list to seed data"
+              title="Refresh team roster"
             >
-              <RotateCcw className="w-3.5 h-3.5 text-[#b88444]" />
-              Reset Demo Team
+              <RefreshCw className="w-3.5 h-3.5 text-[#b88444]" />
+              Refresh
             </button>
 
             <button
@@ -326,7 +382,7 @@ export default function MembersPage() {
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold bg-[#6f0617] text-white hover:bg-[#4b030e] transition-all cursor-pointer shadow-md"
             >
               <UserPlus className="w-4 h-4 text-[#e6bd81]" />
-              Invite New Organizer
+              Assign Co-Organizer / Admin
             </button>
           </div>
         </div>
@@ -402,29 +458,53 @@ export default function MembersPage() {
         </div>
       )}
 
-      {/* Notice for Created Invitation */}
-      {createdInviteResult && (
-        <div className="p-4 rounded-2xl bg-amber-50/90 border-2 border-amber-400 text-xs text-amber-950 space-y-2 shadow-sm animate-in fade-in duration-200">
+      {/* Notice for Created Member Credentials */}
+      {createdCredentials && (
+        <div className="p-5 rounded-2xl bg-emerald-50/95 border-2 border-emerald-400 text-xs text-emerald-950 space-y-3 shadow-md animate-in fade-in duration-200">
           <div className="flex items-center justify-between">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-200 text-amber-900 font-bold text-[10px] uppercase tracking-wider">
-              Invitation Dispatched
-            </span>
-            <button onClick={() => setCreatedInviteResult(null)} className="text-amber-800 hover:text-black">
+            <div className="flex items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-emerald-200 text-emerald-900 font-bold text-[10px] uppercase tracking-wider">
+                ✓ Account Created &amp; Access Granted
+              </span>
+              <span className="font-bold text-sm text-[#4b030e]">{createdCredentials.name}</span>
+            </div>
+            <button onClick={() => setCreatedCredentials(null)} className="text-emerald-800 hover:text-black">
               <X className="w-4 h-4" />
             </button>
           </div>
-          <p className="font-semibold text-sm">
-            Invitation token created for <strong>{createdInviteResult.targetEmail}</strong> as <strong>{createdInviteResult.role}</strong>.
+
+          <p className="text-xs text-emerald-900">
+            This member can now log in directly at <strong className="font-mono text-[#6f0617]">{window.location.origin}/sign-in</strong> using the credentials below:
           </p>
-          <div className="flex items-center gap-2 bg-white/90 p-2.5 rounded-xl border border-amber-300 font-mono text-[11px] text-neutral-800 break-all">
-            <span className="truncate flex-1">
-              {window.location.origin}/app/members?invite={createdInviteResult.token}
-            </span>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 bg-white/90 p-3 rounded-xl border border-emerald-300">
+            <div>
+              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Email / Username</span>
+              <span className="font-mono font-bold text-neutral-800 text-xs break-all">{createdCredentials.email}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Password</span>
+              <span className="font-mono font-bold text-[#6f0617] text-xs">{createdCredentials.password}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase text-neutral-500 font-semibold block">Assigned Role</span>
+              <span className="font-semibold text-xs text-purple-900">{createdCredentials.role} ({createdCredentials.title || 'Team Member'})</span>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1">
             <button
-              onClick={() => handleCopyInviteLink(createdInviteResult.token)}
-              className="px-3 py-1 rounded-lg bg-[#6f0617] text-white font-sans text-xs font-semibold hover:bg-[#4b030e] shrink-0"
+              onClick={handleCopyCredentials}
+              className="px-3.5 py-1.5 rounded-lg bg-[#6f0617] text-white font-sans text-xs font-semibold hover:bg-[#4b030e] flex items-center gap-1.5 cursor-pointer shadow-xs"
             >
-              {copiedToken === createdInviteResult.token ? 'Copied!' : 'Copy Link'}
+              {copiedCreds ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+              {copiedCreds ? 'Copied Login Details!' : 'Copy Login Details (Share via WhatsApp)'}
+            </button>
+            <button
+              onClick={() => setCreatedCredentials(null)}
+              className="px-3 py-1.5 rounded-lg border border-neutral-300 text-neutral-700 text-xs font-semibold hover:bg-neutral-100 cursor-pointer"
+            >
+              Dismiss
             </button>
           </div>
         </div>
@@ -539,8 +619,8 @@ export default function MembersPage() {
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-[#4b030e] text-sm">{member.fullName}</span>
                                 {member.isCurrentSessionUser && (
-                                  <span className="px-2 py-0.2 rounded-full text-[10px] font-bold bg-[#faf9f6] text-[#6f0617] border border-[#e6bd81]">
-                                    You
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#faf9f6] text-[#6f0617] border border-[#e6bd81] shadow-2xs">
+                                    ★ Main Admin (You)
                                   </span>
                                 )}
                               </div>
@@ -564,7 +644,7 @@ export default function MembersPage() {
                               </span>
                             )}
                             <p className="text-[11px] font-medium text-neutral-600">
-                              {member.title || (member.role === 'ADMIN' ? 'Workspace Co-Owner' : 'Coordinator')}
+                              {member.title || (member.role === 'ADMIN' ? 'Workspace Admin' : 'Event Co-Organizer')}
                             </p>
                           </div>
                         </td>
@@ -660,7 +740,7 @@ export default function MembersPage() {
                 {filteredInvitations.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="py-8 text-center text-neutral-400">
-                      No organizer invitations found.
+                      No pending token invitations found. (Assigned team members appear under Active Members).
                     </td>
                   </tr>
                 ) : (
@@ -713,7 +793,6 @@ export default function MembersPage() {
                         <div className="inline-flex items-center gap-1.5">
                           {inv.status === 'PENDING' && (
                             <>
-                              {/* Simulate Accept for Fast Dev Testing */}
                               <button
                                 type="button"
                                 onClick={() => handleSimulateAccept(inv)}
@@ -832,7 +911,7 @@ export default function MembersPage() {
       </div>
 
       {/* ========================================================================= */}
-      {/* 4. MODAL: INVITE NEW ORGANIZER (FR-MEM-01)                                */}
+      {/* 4. MODAL: ASSIGN CO-ORGANIZER OR ADMIN                                     */}
       {/* ========================================================================= */}
       {isInviteModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
@@ -846,28 +925,28 @@ export default function MembersPage() {
 
             <div className="flex items-center gap-2 mb-1">
               <span className="px-2.5 py-0.5 rounded-full bg-[#faf4ec] text-[#6f0617] border border-[#e6bd81] text-[10px] font-bold uppercase tracking-wider">
-                FR-MEM-01 Dispatch
+                Direct Workspace Access
               </span>
             </div>
 
             <h3 className="font-cormorant text-2xl sm:text-3xl font-bold text-[#4b030e]">
-              Invite Team Organizer
+              Assign Co-Organizer or Admin
             </h3>
             <p className="text-xs text-neutral-500 mt-1">
-              Grant trusted planners and family members secure access to coordinate specific wedding modules.
+              Provide their name, email, and assign an access password so they can log in to this wedding dashboard directly.
             </p>
 
             <form onSubmit={handleInviteSubmit} className="space-y-4 mt-5 text-xs">
               <div>
                 <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
-                  Email Address *
+                  Candidate Full Name *
                 </label>
                 <input
-                  type="email"
+                  type="text"
                   required
-                  value={inviteForm.targetEmail}
-                  onChange={(e) => setInviteForm({ ...inviteForm, targetEmail: e.target.value })}
-                  placeholder="e.g. coordinator@weddingcraft.com"
+                  value={inviteForm.targetName}
+                  onChange={(e) => setInviteForm({ ...inviteForm, targetName: e.target.value })}
+                  placeholder="e.g. Vikram Sharma"
                   className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
                 />
               </div>
@@ -875,29 +954,55 @@ export default function MembersPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
-                    Candidate Full Name / Label
+                    Login Email Address *
                   </label>
                   <input
-                    type="text"
-                    value={inviteForm.targetName}
-                    onChange={(e) => setInviteForm({ ...inviteForm, targetName: e.target.value })}
-                    placeholder="e.g. Neha Verma"
+                    type="email"
+                    required
+                    value={inviteForm.targetEmail}
+                    onChange={(e) => setInviteForm({ ...inviteForm, targetEmail: e.target.value })}
+                    placeholder="e.g. vikram@weddingcraft.com"
                     className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
                   />
                 </div>
 
                 <div>
                   <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
-                    Role Title (Optional)
+                    Access Password *
                   </label>
-                  <input
-                    type="text"
-                    value={inviteForm.title}
-                    onChange={(e) => setInviteForm({ ...inviteForm, title: e.target.value })}
-                    placeholder="e.g. Hospitality Desk Lead"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
-                  />
+                  <div className="relative">
+                    <input
+                      type={showInvitePassword ? 'text' : 'password'}
+                      required
+                      minLength={4}
+                      value={inviteForm.password}
+                      onChange={(e) => setInviteForm({ ...inviteForm, password: e.target.value })}
+                      placeholder="e.g. Wedding2026!"
+                      className="w-full pl-3.5 pr-10 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowInvitePassword(!showInvitePassword)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-700 cursor-pointer"
+                    >
+                      {showInvitePassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                  <span className="text-[10px] text-neutral-400 mt-0.5 block">Used by them to log in at /sign-in</span>
                 </div>
+              </div>
+
+              <div>
+                <label className="block font-semibold text-[#4b030e] uppercase tracking-wider text-[11px] mb-1">
+                  Designation / Role Title (Optional)
+                </label>
+                <input
+                  type="text"
+                  value={inviteForm.title}
+                  onChange={(e) => setInviteForm({ ...inviteForm, title: e.target.value })}
+                  placeholder="e.g. Brother of Bride, Event Lead, Hospitality Lead"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-[#e6bd81] bg-[#faf9f6] text-xs text-[#4b030e] focus:outline-none focus:ring-2 focus:ring-[#6f0617] focus:bg-white"
+                />
               </div>
 
               {/* Role Selection */}
@@ -915,7 +1020,7 @@ export default function MembersPage() {
                         : 'border-neutral-200 bg-white hover:border-neutral-300'
                     }`}
                   >
-                    <span className="font-bold text-xs block">Organizer</span>
+                    <span className="font-bold text-xs block">Co-Organizer</span>
                     <span className="text-[10px] text-neutral-500">Fine-grained module access</span>
                   </button>
 
@@ -1017,7 +1122,7 @@ export default function MembersPage() {
                   className="flex-1 py-3 px-5 rounded-xl font-bold text-xs bg-[#6f0617] hover:bg-[#4b030e] text-white shadow-md transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
                   <Send className="w-3.5 h-3.5" />
-                  Dispatch Organizer Invitation
+                  Assign &amp; Authorize Member
                 </button>
                 <button
                   type="button"

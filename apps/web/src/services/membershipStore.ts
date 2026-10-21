@@ -6,6 +6,19 @@ import type {
 } from '../types/membership'
 import { ALL_PERMISSIONS_ENABLED } from '../types/membership'
 import { membersApi, type BackendMembership } from './apiClient'
+import {
+  getLocalAuthSession,
+  registerLocalUser,
+  updateUserRoleAndPermissions,
+} from './authService'
+
+export interface CurrentUserSessionInfo {
+  id?: string
+  fullName?: string
+  email?: string
+  role?: WorkspaceRole
+  avatarUrl?: string
+}
 
 function getActiveWeddingId(): number {
   try {
@@ -22,40 +35,74 @@ function getMembersStorageKey(wid: number): string {
 const MEMBERS_STORAGE_KEY = 'weddingos_workspace_members'
 const INVITES_STORAGE_KEY = 'weddingos_organizer_invitations'
 
+function resolveSessionUser(currentUser?: CurrentUserSessionInfo): CurrentUserSessionInfo | null {
+  if (currentUser && currentUser.email) return currentUser
+  const local = getLocalAuthSession()
+  if (local && local.email) {
+    return {
+      id: local.id,
+      fullName: local.fullName,
+      email: local.email,
+      role: local.role,
+      avatarUrl: local.avatarUrl,
+    }
+  }
+  return null
+}
+
 export async function syncMembersFromBackend(weddingId?: number): Promise<WeddingMembership[]> {
   const wid = weddingId ?? getActiveWeddingId()
   try {
     const backendMembers = await membersApi.getAll(wid)
     if (backendMembers && backendMembers.length > 0) {
-      const mapped: WeddingMembership[] = backendMembers.map((m: BackendMembership) => ({
-        id: String(m.id),
-        weddingId: String(weddingId),
-        userId: String(m.user?.id || m.id),
-        fullName: m.user?.fullName || 'Wedding Organizer',
-        email: m.user?.email || '',
-        role: m.role,
-        title: m.title || (m.role === 'ADMIN' ? 'Administrator' : 'Organizer'),
-        modulePermissions: {
-          events: m.canManageEvents ?? true,
-          tasks: m.canManageTasks ?? true,
-          invitations: m.canManageGuests ?? true,
-          check_in: m.canCheckInGuests ?? true,
-          expenses: m.canManageExpenses ?? false,
-          vendors: m.canManageVendors ?? false,
-          website: m.canManageWebsite ?? false,
-          gallery: m.canModerateGallery ?? true,
-        },
-        joinedAt: m.createdAt,
-        createdAt: m.createdAt,
-        isCurrentSessionUser: m.user?.email === 'aisha.sharma@weddingos.app',
-      }))
-      saveMembers(mapped)
+      const activeSession = resolveSessionUser()
+      const mapped: WeddingMembership[] = backendMembers
+        .filter((m: BackendMembership) => {
+          const email = (m.user?.email || '').toLowerCase()
+          return (
+            email &&
+            email !== 'owner@weddingos.app' &&
+            email !== 'rohan.verma@weddingos.app' &&
+            !email.endsWith('@weddingos.app') &&
+            !m.user?.fullName?.toLowerCase().includes('dummy') &&
+            !m.user?.fullName?.toLowerCase().includes('rohan verma')
+          )
+        })
+        .map((m: BackendMembership) => ({
+          id: String(m.id),
+          weddingId: String(wid),
+          userId: String(m.user?.id || m.id),
+          fullName: m.user?.fullName || 'Wedding Organizer',
+          email: m.user?.email || '',
+          role: m.role,
+          title: m.title || (m.role === 'ADMIN' ? 'Administrator' : 'Organizer'),
+          modulePermissions: {
+            events: m.canManageEvents ?? true,
+            tasks: m.canManageTasks ?? true,
+            invitations: m.canManageGuests ?? true,
+            check_in: m.canCheckInGuests ?? true,
+            expenses: m.canManageExpenses ?? false,
+            vendors: m.canManageVendors ?? false,
+            website: m.canManageWebsite ?? false,
+            gallery: m.canModerateGallery ?? true,
+          },
+          joinedAt: m.createdAt,
+          createdAt: m.createdAt,
+          isCurrentSessionUser: Boolean(
+            activeSession?.email &&
+            m.user?.email &&
+            m.user.email.toLowerCase() === activeSession.email.toLowerCase()
+          ),
+        }))
+
+      // Ensure the logged in user is represented if backend returned an empty or unpopulated list
+      saveMembers(mapped, wid)
       return mapped
     }
   } catch (err) {
     console.warn('Backend members sync offline or pending:', err)
   }
-  return getMembers()
+  return getMembers(wid)
 }
 
 // Initial sync trigger in browser environment
@@ -64,41 +111,81 @@ if (typeof window !== 'undefined') {
 }
 
 export const DEFAULT_MEMBERS: WeddingMembership[] = []
-
 export const DEFAULT_INVITATIONS: OrganizerInvitation[] = []
 
-export function getMembers(weddingId?: number): WeddingMembership[] {
+export function getMembers(weddingId?: number, currentUser?: CurrentUserSessionInfo): WeddingMembership[] {
   const wid = weddingId ?? getActiveWeddingId()
   const key = getMembersStorageKey(wid)
+  const activeUser = resolveSessionUser(currentUser)
+  let list: WeddingMembership[] = []
+
   try {
     const raw = localStorage.getItem(key)
     if (raw) {
       const parsed = JSON.parse(raw)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        return parsed
+      if (Array.isArray(parsed)) {
+        // Purge dummy mock data
+        list = parsed.filter(
+          (m: WeddingMembership) => {
+            const email = (m.email || '').toLowerCase()
+            return (
+              email &&
+              email !== 'owner@weddingos.app' &&
+              email !== 'rohan.verma@weddingos.app' &&
+              !email.endsWith('@weddingos.app') &&
+              !m.fullName?.toLowerCase().includes('dummy') &&
+              !m.fullName?.toLowerCase().includes('rohan verma')
+            )
+          }
+        )
       }
     }
   } catch (err) {
     console.error('Failed reading members from storage', err)
   }
-  // For workspace: default to the current session owner
-  const defaultOwner: WeddingMembership[] = [
-    {
-      id: `mem-${wid}-owner`,
-      weddingId: String(wid),
-      userId: `user-owner-${wid}`,
-      fullName: 'Workspace Owner',
-      email: 'owner@weddingos.app',
-      role: 'ADMIN',
-      title: 'Couple & Workspace Owner',
-      modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
-      joinedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      isCurrentSessionUser: true,
-    },
-  ]
-  saveMembers(defaultOwner, wid)
-  return defaultOwner
+
+  // Ensure active user is present in the list
+  if (activeUser && activeUser.email) {
+    const userEmail = activeUser.email.toLowerCase()
+    const existingIndex = list.findIndex((m) => m.email.toLowerCase() === userEmail)
+
+    if (existingIndex >= 0) {
+      // Update their entry with their real session name and mark as current user
+      list[existingIndex] = {
+        ...list[existingIndex],
+        fullName: activeUser.fullName || list[existingIndex].fullName,
+        isCurrentSessionUser: true,
+      }
+    } else {
+      // Create their entry: default to ADMIN if no prior membership exists
+      const userRole: WorkspaceRole = activeUser.role || 'ADMIN'
+      const newAdminRecord: WeddingMembership = {
+        id: `mem-${wid}-${activeUser.id || 'primary-admin'}`,
+        weddingId: String(wid),
+        userId: activeUser.id || `user-${Date.now()}`,
+        fullName: activeUser.fullName || activeUser.email.split('@')[0],
+        email: activeUser.email,
+        role: userRole,
+        title: userRole === 'ADMIN' ? 'Primary Workspace Admin & Owner' : 'Event Co-Organizer',
+        modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
+        joinedAt: new Date().toISOString(),
+        createdAt: new Date().toISOString(),
+        isCurrentSessionUser: true,
+      }
+
+      // Prepend to top of roster
+      list.unshift(newAdminRecord)
+    }
+
+    // Ensure all other members have isCurrentSessionUser = false
+    list = list.map((m) => ({
+      ...m,
+      isCurrentSessionUser: m.email.toLowerCase() === userEmail,
+    }))
+  }
+
+  saveMembers(list, wid)
+  return list
 }
 
 export function saveMembers(members: WeddingMembership[], weddingId?: number): void {
@@ -106,10 +193,96 @@ export function saveMembers(members: WeddingMembership[], weddingId?: number): v
   const key = getMembersStorageKey(wid)
   try {
     localStorage.setItem(key, JSON.stringify(members))
+    localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(members))
     window.dispatchEvent(new Event('weddingos_members_updated'))
   } catch (err) {
     console.error('Failed saving members to storage', err)
   }
+}
+
+export interface AssignMemberParams {
+  fullName: string
+  email: string
+  password?: string
+  role: WorkspaceRole
+  title?: string
+  modulePermissions: ModulePermissions
+  weddingId?: number
+}
+
+/**
+ * Assigns a Co-Organizer or Admin with Email and Password credentials.
+ * Registers them in authService so they can log in directly at /sign-in,
+ * adds them to the active wedding workspace roster, and syncs to backend.
+ */
+export function assignTeamMember(params: AssignMemberParams): WeddingMembership {
+  const normalizedEmail = params.email.trim().toLowerCase()
+  if (!normalizedEmail || !normalizedEmail.includes('@')) {
+    throw new Error('Please enter a valid email address.')
+  }
+  if (!params.fullName.trim()) {
+    throw new Error('Please enter the team member’s full name.')
+  }
+  if (!params.password || params.password.trim().length < 4) {
+    throw new Error('Please provide an access password (at least 4 characters) so they can log in.')
+  }
+
+  const wid = params.weddingId ?? getActiveWeddingId()
+  const members = getMembers(wid)
+
+  if (members.some((m) => m.email.toLowerCase() === normalizedEmail)) {
+    throw new Error(`A member with email "${normalizedEmail}" is already assigned to this workspace.`)
+  }
+
+  // 1. Register their login credentials in authService
+  registerLocalUser(
+    params.fullName.trim(),
+    normalizedEmail,
+    params.password,
+    params.role,
+    params.modulePermissions
+  )
+
+  // 2. Create active membership record
+  const newMember: WeddingMembership = {
+    id: `mem-${wid}-${Date.now()}`,
+    weddingId: String(wid),
+    userId: `usr-${Date.now()}`,
+    fullName: params.fullName.trim(),
+    email: normalizedEmail,
+    role: params.role,
+    title: params.title?.trim() || (params.role === 'ADMIN' ? 'Co-Administrator' : 'Event Co-Organizer'),
+    modulePermissions: params.role === 'ADMIN' ? { ...ALL_PERMISSIONS_ENABLED } : { ...params.modulePermissions },
+    joinedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    isCurrentSessionUser: false,
+  }
+
+  const updatedMembers = [...members, newMember]
+  saveMembers(updatedMembers, wid)
+
+  // 3. Persist to backend database
+  membersApi.invite({
+    fullName: newMember.fullName,
+    email: newMember.email,
+    role: newMember.role,
+    title: newMember.title,
+  }).then((created) => {
+    if (created?.id && params.role === 'ORGANIZER') {
+      membersApi.updatePermissions(created.id, {
+        canManageEvents: newMember.modulePermissions.events,
+        canManageTasks: newMember.modulePermissions.tasks,
+        canManageGuests: newMember.modulePermissions.invitations,
+        canCheckInGuests: newMember.modulePermissions.check_in,
+        canManageExpenses: newMember.modulePermissions.expenses,
+        canManageVendors: newMember.modulePermissions.vendors,
+        canManageWebsite: newMember.modulePermissions.website,
+        canModerateGallery: newMember.modulePermissions.gallery,
+      }).catch(() => {})
+    }
+  }).catch((e) => console.warn('Failed syncing new member to backend:', e))
+
+  return newMember
 }
 
 export function getOrganizerInvitations(): OrganizerInvitation[] {
@@ -124,8 +297,7 @@ export function getOrganizerInvitations(): OrganizerInvitation[] {
   } catch (err) {
     console.error('Failed reading invitations from storage', err)
   }
-  saveOrganizerInvitations(DEFAULT_INVITATIONS)
-  return DEFAULT_INVITATIONS
+  return []
 }
 
 export function saveOrganizerInvitations(invites: OrganizerInvitation[]): void {
@@ -176,6 +348,9 @@ export function updateMemberRoleAndPermissions(
   members[index] = updated
   saveMembers(members)
 
+  // Update in local auth registry so credentials match new role
+  updateUserRoleAndPermissions(existing.email, newRole, updated.modulePermissions)
+
   const numericId = parseInt(memberId.replace(/\D/g, ''), 10)
   if (!isNaN(numericId) && numericId > 0) {
     membersApi.updateRole(numericId, newRole).catch((e) => console.warn('Failed syncing role update to backend:', e))
@@ -225,16 +400,15 @@ export function removeMember(memberId: string): void {
 }
 
 /**
- * Creates and persists a pending invitation for an organizer.
- * Follows FR-MEM-01 & DBDD section 6.
+ * Legacy invite token generator kept for compatibility
  */
 export function inviteOrganizer(
   targetEmail: string,
   targetName: string,
   role: WorkspaceRole,
   permissions: ModulePermissions,
-  inviterName: string = 'Aisha Sharma (Admin)',
-  inviterId: string = 'user-aisha-1',
+  inviterName: string = 'Workspace Admin',
+  inviterId: string = 'user-admin',
   title?: string
 ): OrganizerInvitation {
   const normalizedEmail = targetEmail.trim().toLowerCase()
@@ -262,11 +436,11 @@ export function inviteOrganizer(
 
   const token = `wos-team-${cleanSlug}-${Math.floor(1000 + Math.random() * 9000)}`
   const now = new Date()
-  const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000) // 7 days
+  const expires = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
 
   const newInvite: OrganizerInvitation = {
     id: `inv-org-${Date.now()}`,
-    weddingId: 'wed-1',
+    weddingId: '1',
     targetEmail: normalizedEmail,
     targetName: targetName.trim() || undefined,
     role,
@@ -282,7 +456,6 @@ export function inviteOrganizer(
   const nextInvites = [newInvite, ...invites]
   saveOrganizerInvitations(nextInvites)
 
-  // Persist to backend
   membersApi.invite({
     fullName: targetName.trim() || normalizedEmail.split('@')[0],
     email: normalizedEmail,
@@ -295,9 +468,6 @@ export function inviteOrganizer(
   return newInvite
 }
 
-/**
- * Revokes an existing pending invitation.
- */
 export function revokeInvitation(invitationId: string): void {
   const invites = getOrganizerInvitations()
   const updated = invites.map((inv) =>
@@ -306,9 +476,6 @@ export function revokeInvitation(invitationId: string): void {
   saveOrganizerInvitations(updated)
 }
 
-/**
- * Simulates accepting an invitation and converting it into a full membership.
- */
 export function acceptInvitation(
   invitationIdOrToken: string,
   acceptorName?: string
@@ -324,13 +491,11 @@ export function acceptInvitation(
     throw new Error('Invitation is invalid, expired, or already accepted/revoked (FR-MEM-02).')
   }
 
-  // Mark invite accepted
   const updatedInvites = invites.map((i) =>
     i.id === invite.id ? { ...i, status: 'ACCEPTED' as const } : i
   )
   saveOrganizerInvitations(updatedInvites)
 
-  // Create membership
   const members = getMembers()
   const newMember: WeddingMembership = {
     id: `mem-${Date.now()}`,
@@ -350,23 +515,27 @@ export function acceptInvitation(
   return newMember
 }
 
-export function resetMembershipDemoData(weddingId?: number): void {
+export function resetMembershipDemoData(weddingId?: number, currentUser?: CurrentUserSessionInfo): void {
   const wid = weddingId ?? getActiveWeddingId()
-  const defaultOwner: WeddingMembership[] = [
-    {
-      id: `mem-${wid}-owner`,
-      weddingId: String(wid),
-      userId: `user-owner-${wid}`,
-      fullName: 'Workspace Owner',
-      email: 'owner@weddingos.app',
-      role: 'ADMIN',
-      title: 'Couple & Workspace Owner',
-      modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
-      joinedAt: new Date().toISOString(),
-      createdAt: new Date().toISOString(),
-      isCurrentSessionUser: true,
-    },
-  ]
+  const active = resolveSessionUser(currentUser)
+  const defaultOwner: WeddingMembership[] = active && active.email
+    ? [
+        {
+          id: `mem-${wid}-${active.id || 'admin'}`,
+          weddingId: String(wid),
+          userId: active.id || `user-admin-${wid}`,
+          fullName: active.fullName || active.email.split('@')[0],
+          email: active.email,
+          role: 'ADMIN',
+          title: 'Primary Workspace Admin & Owner',
+          modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
+          joinedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          isCurrentSessionUser: true,
+        },
+      ]
+    : []
+
   localStorage.setItem(getMembersStorageKey(wid), JSON.stringify(defaultOwner))
   localStorage.setItem(MEMBERS_STORAGE_KEY, JSON.stringify(defaultOwner))
   localStorage.setItem(INVITES_STORAGE_KEY, JSON.stringify([]))

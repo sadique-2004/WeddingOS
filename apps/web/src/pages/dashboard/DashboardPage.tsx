@@ -19,6 +19,7 @@ import {
   RotateCcw,
   AlertTriangle,
   Settings,
+  User,
   Info
 } from 'lucide-react'
 import { workspacesApi, eventsApi, tasksApi, expensesApi, galleryApi } from '../../services/apiClient'
@@ -326,10 +327,12 @@ export default function DashboardPage() {
     setIsResetting(true)
     const wid = wedding.id || 1
     try {
-      // 1. Reset in MySQL TiDB Cloud backend
-      await workspacesApi.reset(wid).catch((err) => {
+      // 1. Reset in MySQL backend
+      try {
+        await workspacesApi.reset(wid)
+      } catch (err) {
         console.warn('Backend reset call encountered error, proceeding with local clean:', err)
-      })
+      }
 
       // 2. Clear all related localStorage items for this wedding
       const keysToClear = [
@@ -359,8 +362,8 @@ export default function DashboardPage() {
       resetToDemoData()
       resetMembershipDemoData(wid)
 
-      // 4. Reset local React states
-      setWedding({
+      // 4. Explicitly seed clean blank states so no stale fallbacks reload
+      const cleanWedding = {
         id: wid,
         brideName: '',
         groomName: '',
@@ -370,7 +373,18 @@ export default function DashboardPage() {
         venueName: '',
         totalBudgetTarget: 0,
         expectedGuestCapacity: 0,
-      })
+      }
+      localStorage.setItem('weddingos_active_wedding', JSON.stringify(cleanWedding))
+      localStorage.setItem(`weddingos_${wid}_events`, '[]')
+      localStorage.setItem(`weddingos_${wid}_expenses`, '[]')
+      localStorage.setItem(`weddingos_${wid}_tasks`, '[]')
+      localStorage.setItem(`weddingos_${wid}_vendors`, '[]')
+      localStorage.setItem('weddingos_gallery_photos', '[]')
+      localStorage.setItem('weddingos_workspace_members', '[]')
+      localStorage.setItem('weddingos_family_invitations', '[]')
+
+      // 5. Reset local React states
+      setWedding(cleanWedding)
       setTasks([])
       setEvents([])
       setTotalExpenses(0)
@@ -385,7 +399,7 @@ export default function DashboardPage() {
         approvedCount: 0,
       })
 
-      // 5. Trigger notifications & close modal
+      // 6. Trigger notifications & close modal
       window.dispatchEvent(new Event('weddingos_wedding_updated'))
       window.dispatchEvent(new Event('weddingos_invitations_updated'))
       window.dispatchEvent(new Event('weddingos_members_updated'))
@@ -472,11 +486,11 @@ export default function DashboardPage() {
             </button>
 
             <Link
-              to="/app/settings"
+              to="/app/profile"
               className="inline-flex items-center gap-1.5 text-xs font-medium text-white/95 bg-black/40 hover:bg-black/60 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-white/20 transition-colors"
             >
-              <Settings className="w-3.5 h-3.5 text-[#e6bd81]" />
-              <span>Workspace Settings</span>
+              <User className="w-3.5 h-3.5 text-[#e6bd81]" />
+              <span>Wedding Profile</span>
             </Link>
           </div>
         </div>
@@ -564,7 +578,7 @@ export default function DashboardPage() {
 
           <div className="flex items-center gap-2 w-full sm:w-auto">
             {!hasCoupleDetails ? (
-              <Link to="/app/settings" className="w-full sm:w-auto">
+              <Link to="/app/profile" className="w-full sm:w-auto">
                 <Button variant="primary" size="sm" leftIcon={<Sparkles className="w-3.5 h-3.5" />}>
                   Setup Wedding Details
                 </Button>

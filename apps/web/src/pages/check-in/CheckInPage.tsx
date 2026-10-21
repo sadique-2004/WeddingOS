@@ -39,17 +39,18 @@ import {
   getCheckInLogs,
   resetToDemoData,
 } from '../../services/invitationStore'
+import { workspacesApi } from '../../services/apiClient'
 
 export default function CheckInPage() {
   const { user } = useUser()
-  const organizerName = user?.fullName || user?.firstName || 'Aisha Sharma (Lead Coordinator)'
+  const organizerName = user?.fullName || user?.firstName || 'Reception Desk Lead'
 
   // Active Wedding Details
   const [wedding, setWedding] = useState({
-    brideName: 'Aisha',
-    groomName: 'Imran',
-    weddingDate: '2027-02-18',
-    locationName: 'Bengaluru, Karnataka',
+    brideName: '',
+    groomName: '',
+    weddingDate: '',
+    locationName: '',
   })
 
   // Store data
@@ -113,23 +114,48 @@ export default function CheckInPage() {
   }
 
   useEffect(() => {
-    try {
-      const stored = localStorage.getItem('weddingos_active_wedding')
-      if (stored) {
-        setWedding(JSON.parse(stored))
+    const loadWedding = async () => {
+      try {
+        const stored = localStorage.getItem('weddingos_active_wedding')
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          setWedding({
+            brideName: parsed.brideName || '',
+            groomName: parsed.groomName || '',
+            weddingDate: parsed.weddingDate || '',
+            locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+          })
+        }
+      } catch {
+        // ignore
       }
-    } catch {
-      // ignore
+
+      try {
+        const active = await workspacesApi.getActive(1)
+        if (active) {
+          setWedding({
+            brideName: active.brideName || '',
+            groomName: active.groomName || '',
+            weddingDate: active.weddingDate || '',
+            locationName: active.venueName || active.city || '',
+          })
+        }
+      } catch {
+        // ignore
+      }
     }
 
+    loadWedding()
     refreshData()
 
     const handleUpdate = () => {
       refreshData()
     }
     window.addEventListener('weddingos_invitations_updated', handleUpdate)
+    window.addEventListener('weddingos_wedding_updated', loadWedding)
     return () => {
       window.removeEventListener('weddingos_invitations_updated', handleUpdate)
+      window.removeEventListener('weddingos_wedding_updated', loadWedding)
     }
   }, [])
 
@@ -396,8 +422,15 @@ export default function CheckInPage() {
               Family Reception &amp; QR Check-In
             </h1>
             <p className="text-sm text-[#4b030e]/80 mt-1 max-w-2xl">
-              Welcome esteemed families to <strong>{wedding.brideName} &amp; {wedding.groomName}’s</strong> celebration.
-              Scan guest QR codes or verify invitation identity to mark family arrival in real time.
+              Welcome esteemed families to{' '}
+              <strong>
+                {wedding.brideName && wedding.groomName
+                  ? `${wedding.brideName} & ${wedding.groomName}’s`
+                  : wedding.brideName || wedding.groomName
+                  ? `${wedding.brideName || wedding.groomName}’s`
+                  : 'the sacred wedding'}
+              </strong>{' '}
+              celebration. Scan guest QR codes or verify invitation identity to mark family arrival in real time.
             </p>
           </div>
 
@@ -1243,7 +1276,10 @@ export default function CheckInPage() {
                   {passPreviewFamily.displayName}
                 </h3>
                 <p className="text-xs text-neutral-500 mt-0.5">
-                  Celebrating {wedding.brideName} &amp; {wedding.groomName} • {wedding.locationName}
+                  {wedding.brideName && wedding.groomName
+                    ? `Celebrating ${wedding.brideName} & ${wedding.groomName}`
+                    : 'Celebrating the Sacred Wedding'}
+                  {wedding.locationName ? ` • ${wedding.locationName}` : ''}
                 </p>
               </div>
 
