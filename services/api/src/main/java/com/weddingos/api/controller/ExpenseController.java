@@ -22,14 +22,14 @@ public class ExpenseController {
 
     @GetMapping
     @Operation(summary = "Get full expenditure ledger with budget health, runway and category breakdowns")
-    public ResponseEntity<Map<String, Object>> getExpenses(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<Map<String, Object>> getExpenses(@RequestParam Long weddingId) {
         return ResponseEntity.ok(expenseService.getExpensesWithSummary(weddingId));
     }
 
     @PostMapping
     @Operation(summary = "Record a new wedding expense in the ledger")
     public ResponseEntity<Expense> createExpense(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody Expense expense) {
         return ResponseEntity.ok(expenseService.createExpense(weddingId, expense));
     }

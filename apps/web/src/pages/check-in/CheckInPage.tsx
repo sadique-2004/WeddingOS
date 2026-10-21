@@ -39,7 +39,7 @@ import {
   getCheckInLogs,
   resetToDemoData,
 } from '../../services/invitationStore'
-import { workspacesApi } from '../../services/apiClient'
+import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 
 export default function CheckInPage() {
   const { user } = useUser()
@@ -131,7 +131,7 @@ export default function CheckInPage() {
       }
 
       try {
-        const active = await workspacesApi.getActive(1)
+        const active = await workspacesApi.getActive(getActiveWeddingId() || undefined)
         if (active) {
           setWedding({
             brideName: active.brideName || '',

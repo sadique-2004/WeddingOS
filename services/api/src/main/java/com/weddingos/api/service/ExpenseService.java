@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.Expense;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.ExpenseRepository;
@@ -26,7 +27,7 @@ public class ExpenseService {
     @Transactional(readOnly = true)
     public Map<String, Object> getExpensesWithSummary(Long weddingId) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
 
         List<Expense> expenses = expenseRepository.findByWeddingIdOrderByExpenseDateDesc(weddingId);
         BigDecimal totalBudget = wedding.getTotalBudgetTarget();
@@ -74,14 +75,14 @@ public class ExpenseService {
 
     public Expense createExpense(Long weddingId, Expense expense) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         expense.setWedding(wedding);
         return expenseRepository.save(expense);
     }
 
     public Expense updateExpense(Long id, Expense updates) {
         Expense existing = expenseRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Expense not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Expense not found: " + id));
 
         if (updates.getTitle() != null) existing.setTitle(updates.getTitle());
         if (updates.getCategory() != null) existing.setCategory(updates.getCategory());

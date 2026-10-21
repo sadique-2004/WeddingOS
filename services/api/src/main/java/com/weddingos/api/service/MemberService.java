@@ -1,5 +1,8 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 import com.weddingos.api.model.AppUser;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.model.WeddingMembership;
@@ -35,7 +38,7 @@ public class MemberService {
 
     public WeddingMembership inviteMember(Long weddingId, String fullName, String email, WeddingMembership.Role role, String title) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
 
         AppUser user = userRepository.findByEmail(email).orElseGet(() -> {
             AppUser newUser = new AppUser("clerk_invited_" + UUID.randomUUID().toString().substring(0, 8), email, fullName);
@@ -64,7 +67,7 @@ public class MemberService {
 
     public WeddingMembership updatePermissions(Long membershipId, WeddingMembership permissions) {
         WeddingMembership existing = membershipRepository.findById(membershipId)
-                .orElseThrow(() -> new IllegalArgumentException("Membership not found: " + membershipId));
+                .orElseThrow(() -> new NotFoundException("Membership not found: " + membershipId));
 
         if (permissions.getCanManageEvents() != null) existing.setCanManageEvents(permissions.getCanManageEvents());
         if (permissions.getCanManageTasks() != null) existing.setCanManageTasks(permissions.getCanManageTasks());
@@ -80,13 +83,13 @@ public class MemberService {
 
     public WeddingMembership updateRole(Long membershipId, WeddingMembership.Role newRole) {
         WeddingMembership existing = membershipRepository.findById(membershipId)
-                .orElseThrow(() -> new IllegalArgumentException("Membership not found: " + membershipId));
+                .orElseThrow(() -> new NotFoundException("Membership not found: " + membershipId));
 
         // Enforce FR-MEM-06: Protect last admin
         if (existing.getRole() == WeddingMembership.Role.ADMIN && newRole != WeddingMembership.Role.ADMIN) {
             long adminCount = membershipRepository.countByWeddingIdAndRole(existing.getWedding().getId(), WeddingMembership.Role.ADMIN);
             if (adminCount <= 1) {
-                throw new IllegalStateException("Security invariant (FR-MEM-06): Cannot demote the last remaining ADMIN in the workspace.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security invariant (FR-MEM-06): Cannot demote the last remaining ADMIN in the workspace.");
             }
         }
 
@@ -107,13 +110,13 @@ public class MemberService {
 
     public void removeMember(Long membershipId) {
         WeddingMembership existing = membershipRepository.findById(membershipId)
-                .orElseThrow(() -> new IllegalArgumentException("Membership not found: " + membershipId));
+                .orElseThrow(() -> new NotFoundException("Membership not found: " + membershipId));
 
         // Enforce FR-MEM-06: Protect last admin
         if (existing.getRole() == WeddingMembership.Role.ADMIN) {
             long adminCount = membershipRepository.countByWeddingIdAndRole(existing.getWedding().getId(), WeddingMembership.Role.ADMIN);
             if (adminCount <= 1) {
-                throw new IllegalStateException("Security invariant (FR-MEM-06): Cannot remove the last remaining ADMIN in the workspace.");
+                throw new ResponseStatusException(HttpStatus.CONFLICT, "Security invariant (FR-MEM-06): Cannot remove the last remaining ADMIN in the workspace.");
             }
         }
 

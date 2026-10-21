@@ -16,7 +16,7 @@ import {
   ArrowLeft,
   Image as ImageIcon
 } from 'lucide-react'
-import { galleryApi, workspacesApi } from '../../services/apiClient'
+import { galleryApi, websiteApi } from '../../services/apiClient'
 
 export interface GalleryPhoto {
   id: string
@@ -59,14 +59,14 @@ export default function PublicGalleryPage() {
       // ignore
     }
     return {
-      id: 1,
+      id: 0,
       brideName: '',
       groomName: '',
       city: '',
     }
   })
 
-  const weddingId = wedding.id || 1
+  const weddingId = wedding.id || 0 // local cache key only; 0 = unresolved (never wedding 1)
   const storageKey = `weddingos_${weddingId}_gallery_photos`
 
   // Photos State
@@ -126,47 +126,53 @@ export default function PublicGalleryPage() {
     }
   }, [storageKey])
 
+  // Wedding resolved from the URL slug; null until resolved (or when the slug is unknown)
+  const [publicWeddingId, setPublicWeddingId] = useState<number | null>(null)
+
   // Fetch approved photos and couple details from backend
   useEffect(() => {
-    // 1. Fetch real couple names
-    workspacesApi.getActive(1).then((active: any) => {
-      if (active) {
-        setWedding((prev: any) => ({
-          ...prev,
-          id: active.id || prev.id,
-          brideName: active.brideName || prev.brideName,
-          groomName: active.groomName || prev.groomName,
-          city: active.venueName || active.city || prev.city,
-        }))
-      }
-    }).catch((err: any) => console.warn('Could not load active wedding:', err))
+    if (!slug) return
 
-    // 2. Fetch approved Cloudinary photos
-    galleryApi.getAll(1).then((backendPhotos) => {
-      if (Array.isArray(backendPhotos) && backendPhotos.length > 0) {
-        const mapped: GalleryPhoto[] = backendPhotos.map((p: any) => ({
-          id: `photo-db-${p.id}`,
-          url: p.photoUrl,
-          title: p.caption || 'Wedding Memory',
-          caption: p.caption,
-          ceremony: p.ceremonyTag || 'Guest Candids',
-          uploaderName: p.uploaderName || 'Wedding Guest',
-          uploaderRole: 'Guest Contributor',
-          uploadedAt: p.uploadedAt ? new Date(p.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
-          status: 'APPROVED',
-          fileSize: '3.5 MB',
-          dimensions: '3840 x 2560',
-          likesCount: p.likesCount || 0,
-        }))
+    // 1. Resolve the wedding from the public slug (unknown slug => 404, never another wedding)
+    websiteApi.getPublic(slug).then((publicData: any) => {
+      const wid = Number(publicData?.weddingId)
+      if (!Number.isInteger(wid) || wid <= 0) return
+      setPublicWeddingId(wid)
+      setWedding((prev: any) => ({
+        ...prev,
+        id: wid,
+        brideName: publicData.brideName || prev.brideName,
+        groomName: publicData.groomName || prev.groomName,
+        city: publicData.venueName || publicData.city || prev.city,
+      }))
 
-        setPhotos((prev) => {
-          const dbUrls = new Set(mapped.map((m) => m.url))
-          const nonDuplicates = prev.filter((p) => !dbUrls.has(p.url))
-          return [...mapped, ...nonDuplicates]
-        })
-      }
-    }).catch((err) => console.warn('Could not load approved photos from backend:', err))
-  }, [])
+      // 2. Fetch approved Cloudinary photos for that wedding only
+      return galleryApi.getAll(wid).then((backendPhotos) => {
+        if (Array.isArray(backendPhotos) && backendPhotos.length > 0) {
+          const mapped: GalleryPhoto[] = backendPhotos.map((p: any) => ({
+            id: `photo-db-${p.id}`,
+            url: p.photoUrl,
+            title: p.caption || 'Wedding Memory',
+            caption: p.caption,
+            ceremony: p.ceremonyTag || 'Guest Candids',
+            uploaderName: p.uploaderName || 'Wedding Guest',
+            uploaderRole: 'Guest Contributor',
+            uploadedAt: p.uploadedAt ? new Date(p.uploadedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Recently',
+            status: 'APPROVED',
+            fileSize: '3.5 MB',
+            dimensions: '3840 x 2560',
+            likesCount: p.likesCount || 0,
+          }))
+  
+          setPhotos((prev) => {
+            const dbUrls = new Set(mapped.map((m) => m.url))
+            const nonDuplicates = prev.filter((p) => !dbUrls.has(p.url))
+            return [...mapped, ...nonDuplicates]
+          })
+        }
+      })
+    }).catch((err) => console.warn('Could not load gallery for this link:', err))
+  }, [slug])
 
   // Approved Photos Only for public stream
   const approvedPhotos = useMemo(() => {
@@ -207,8 +213,11 @@ export default function PublicGalleryPage() {
     let finalUrl = previewUrl || ''
     if (selectedRawFile) {
       try {
+        if (!publicWeddingId) {
+          throw new Error('This gallery link does not match a known wedding.')
+        }
         const backendPhoto = await galleryApi.uploadFile(selectedRawFile, {
-          weddingId: 1,
+          weddingId: publicWeddingId,
           caption: caption.trim(),
           ceremonyTag: ceremony,
           uploaderName: uploaderName.trim() || 'Wedding Guest',

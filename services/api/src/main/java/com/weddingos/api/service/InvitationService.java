@@ -1,5 +1,7 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.BadRequestException;
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.FamilyInvitation;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.FamilyInvitationRepository;
@@ -46,7 +48,7 @@ public class InvitationService {
 
     public FamilyInvitation createInvitation(Long weddingId, FamilyInvitation invitation) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         invitation.setWedding(wedding);
         if (invitation.getInvitationToken() == null || invitation.getInvitationToken().isBlank()) {
             invitation.setInvitationToken("wos-" + UUID.randomUUID().toString().substring(0, 8));
@@ -56,7 +58,7 @@ public class InvitationService {
 
     public FamilyInvitation updateInvitation(Long id, FamilyInvitation updates) {
         FamilyInvitation existing = invitationRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Invitation not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Invitation not found: " + id));
 
         if (updates.getDisplayName() != null) existing.setDisplayName(updates.getDisplayName());
         if (updates.getPrimaryContactName() != null) existing.setPrimaryContactName(updates.getPrimaryContactName());
@@ -79,7 +81,7 @@ public class InvitationService {
     @Transactional(readOnly = true)
     public FamilyInvitation getByToken(String token) {
         return invitationRepository.findByInvitationToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid invitation token: " + token));
+                .orElseThrow(() -> new NotFoundException("Invitation not found for the supplied token."));
     }
 
     public FamilyInvitation submitRsvp(String token, Integer actualAttendees, FamilyInvitation.RsvpStatus status, String dietaryNotes) {
@@ -88,7 +90,7 @@ public class InvitationService {
         if (status == FamilyInvitation.RsvpStatus.ATTENDING) {
             int count = actualAttendees != null ? actualAttendees : invitation.getMaxAttendees();
             if (count > invitation.getMaxAttendees()) {
-                throw new IllegalArgumentException("Attendee count cannot exceed max allowed: " + invitation.getMaxAttendees());
+                throw new BadRequestException("Attendee count cannot exceed max allowed: " + invitation.getMaxAttendees());
             }
             invitation.setActualAttendees(count);
             invitation.setRsvpStatus(FamilyInvitation.RsvpStatus.ATTENDING);
@@ -106,7 +108,7 @@ public class InvitationService {
 
     public Map<String, String> generateWhatsAppMessage(Long invitationId, String baseUrl) {
         FamilyInvitation inv = invitationRepository.findById(invitationId)
-                .orElseThrow(() -> new IllegalArgumentException("Invitation not found: " + invitationId));
+                .orElseThrow(() -> new NotFoundException("Invitation not found: " + invitationId));
 
         String inviteLink = baseUrl + "/invite/" + inv.getInvitationToken();
 

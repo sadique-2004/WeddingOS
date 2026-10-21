@@ -21,11 +21,12 @@ export interface CurrentUserSessionInfo {
 }
 
 function getActiveWeddingId(): number {
+  // 0 = no active wedding (never fall back to wedding 1)
   try {
     const raw = localStorage.getItem('weddingos_active_wedding')
-    if (raw) return Number(JSON.parse(raw).id) || 1
+    if (raw) return Number(JSON.parse(raw).id) || 0
   } catch {}
-  return 1
+  return 0
 }
 
 function getMembersStorageKey(wid: number): string {
@@ -440,7 +441,7 @@ export function inviteOrganizer(
 
   const newInvite: OrganizerInvitation = {
     id: `inv-org-${Date.now()}`,
-    weddingId: '1',
+    weddingId: String(getActiveWeddingId()),
     targetEmail: normalizedEmail,
     targetName: targetName.trim() || undefined,
     role,

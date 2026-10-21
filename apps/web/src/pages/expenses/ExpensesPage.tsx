@@ -67,16 +67,17 @@ const INITIAL_EXPENSES: Expense[] = []
 
 export default function ExpensesPage() {
   const getActiveWeddingId = (): number => {
+    // 0 = no active wedding (never fall back to wedding 1)
     try {
       const stored = localStorage.getItem('weddingos_active_wedding')
       if (stored) {
         const parsed = JSON.parse(stored)
-        return Number(parsed.id) || 1
+        return Number(parsed.id) || 0
       }
     } catch {
       // ignore
     }
-    return 1
+    return 0
   }
 
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())

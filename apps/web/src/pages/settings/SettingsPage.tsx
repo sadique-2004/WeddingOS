@@ -22,7 +22,7 @@ import {
 } from 'lucide-react'
 import { resetToDemoData } from '../../services/invitationStore'
 import { resetMembershipDemoData } from '../../services/membershipStore'
-import { workspacesApi } from '../../services/apiClient'
+import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 
 export interface WeddingWorkspaceSettings {
   id: string | number
@@ -97,7 +97,8 @@ export default function SettingsPage() {
       // ignore
     }
 
-    workspacesApi.getActive(1).then((backendData: any) => {
+    // Resolve the signed-in user's workspace (never wedding 1 by default)
+    workspacesApi.getActive(getActiveWeddingId() || undefined).then((backendData: any) => {
       if (backendData) {
         setSettings((prev) => ({
           ...prev,
@@ -163,7 +164,7 @@ export default function SettingsPage() {
             venueName: settings.locationName.trim(),
             city: settings.locationName.trim(),
             slug: settings.slug.trim(),
-          }, 1)
+          })
         } catch (apiErr) {
           console.warn('Backend sync error:', apiErr)
         }
@@ -221,18 +222,24 @@ export default function SettingsPage() {
 
   // Handle Reset All Data
   const handleFullResetDemoData = async () => {
+    const wid = getActiveWeddingId()
     try {
-      await workspacesApi.reset(1).catch(() => {})
-    } catch {}
+      await workspacesApi.reset(wid)
+    } catch (err: any) {
+      // Backend reset is disabled (403) or no wedding is selected: keep all data and report it.
+      setIsResetConfirmOpen(false)
+      setErrorNotice(err?.message || 'Workspace reset is not available. No data was changed.')
+      return
+    }
     resetToDemoData()
-    resetMembershipDemoData(1)
+    resetMembershipDemoData(wid)
     const cleanSettings = { ...DEFAULT_SETTINGS }
     localStorage.setItem('weddingos_active_wedding', JSON.stringify(cleanSettings))
     setSettings(cleanSettings)
 
     const keys = [
-      'weddingos_1_events', 'weddingos_1_expenses', 'weddingos_1_tasks', 'weddingos_1_vendors',
-      'weddingos_events_1', 'weddingos_expenses_1', 'weddingos_tasks_1', 'weddingos_vendors_1',
+      `weddingos_${wid}_events`, `weddingos_${wid}_expenses`, `weddingos_${wid}_tasks`, `weddingos_${wid}_vendors`,
+      `weddingos_events_${wid}`, `weddingos_expenses_${wid}`, `weddingos_tasks_${wid}`, `weddingos_vendors_${wid}`,
       'weddingos_gallery_photos', 'weddingos_gallery_settings', 'weddingos_website_config'
     ]
     keys.forEach((k) => localStorage.removeItem(k))

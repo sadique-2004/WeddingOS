@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.CheckInLog;
 import com.weddingos.api.model.FamilyInvitation;
 import com.weddingos.api.model.Wedding;
@@ -38,10 +39,10 @@ public class CheckInService {
 
     public Map<String, Object> verifyAndCheckIn(Long weddingId, String token, Integer attendeeCount, String checkedInBy) {
         FamilyInvitation invitation = invitationRepository.findByInvitationToken(token)
-                .orElseThrow(() -> new IllegalArgumentException("Invalid invitation QR code / token: " + token));
+                .orElseThrow(() -> new NotFoundException("Invitation not found for the supplied token."));
 
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
 
         boolean alreadyCheckedIn = invitation.getCheckedInAt() != null;
         int countToAdmit = attendeeCount != null ? attendeeCount : (invitation.getActualAttendees() > 0 ? invitation.getActualAttendees() : invitation.getMaxAttendees());

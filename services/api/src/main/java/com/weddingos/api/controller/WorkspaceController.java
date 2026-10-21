@@ -1,11 +1,14 @@
 package com.weddingos.api.controller;
 
+import com.weddingos.api.exception.BadRequestException;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.service.WorkspaceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -44,7 +47,10 @@ public class WorkspaceController {
 
     @PostMapping
     @Operation(summary = "Create a new wedding workspace for a couple/organizer")
-    public ResponseEntity<Wedding> createWorkspace(@RequestBody Map<String, Object> payload) {
+    public ResponseEntity<Wedding> createWorkspace(
+            @RequestBody Map<String, Object> payload,
+            @RequestHeader(value = "X-User-Email", required = false) String headerEmail,
+            @RequestHeader(value = "X-Clerk-User-Id", required = false) String headerClerkId) {
         String bride = (String) payload.get("brideName");
         String groom = (String) payload.get("groomName");
         LocalDate date = payload.containsKey("weddingDate") ? LocalDate.parse(payload.get("weddingDate").toString()) : null;
@@ -54,7 +60,7 @@ public class WorkspaceController {
                 : (payload.containsKey("totalBudget") ? new BigDecimal(payload.get("totalBudget").toString()) : null);
         Long ownerUserId = payload.containsKey("ownerUserId") ? Long.valueOf(payload.get("ownerUserId").toString()) : null;
         String slug = (String) payload.get("slug");
-        return ResponseEntity.ok(workspaceService.createWorkspace(ownerUserId, bride, groom, date, city, venue, budget, slug));
+        return ResponseEntity.ok(workspaceService.createWorkspace(ownerUserId, headerEmail, headerClerkId, bride, groom, date, city, venue, budget, slug));
     }
 
     @PutMapping("/budget")
@@ -67,6 +73,9 @@ public class WorkspaceController {
             try {
                 targetWid = Long.valueOf(payload.get("weddingId").toString());
             } catch (Exception ignored) {}
+        }
+        if (payload.get("totalBudgetTarget") == null) {
+            throw new BadRequestException("totalBudgetTarget is required.");
         }
         BigDecimal amount = new BigDecimal(payload.get("totalBudgetTarget").toString());
         return ResponseEntity.ok(workspaceService.updateBudgetTarget(targetWid, amount));
@@ -93,16 +102,21 @@ public class WorkspaceController {
         return ResponseEntity.ok(workspaceService.updateWeddingDetails(targetWid, bride, groom, date, city, venue, slug));
     }
 
+    // Destructive reset is disabled until the API authenticates callers and checks wedding membership.
+    // These handlers never call WorkspaceService.resetWorkspaceData, so no data is deleted.
+    static final String RESET_DISABLED_MESSAGE =
+            "Workspace reset is temporarily disabled. No data was changed.";
+
     @PostMapping("/reset")
-    @Operation(summary = "Reset all workspace data to a clean blank slate")
-    public ResponseEntity<Map<String, Object>> resetWorkspace(@RequestParam(defaultValue = "1") Long weddingId) {
-        return ResponseEntity.ok(workspaceService.resetWorkspaceData(weddingId));
+    @Operation(summary = "Reset all workspace data (temporarily disabled; always returns 403)")
+    public ResponseEntity<Map<String, Object>> resetWorkspace() {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, RESET_DISABLED_MESSAGE);
     }
 
     @PostMapping("/{id}/reset")
-    @Operation(summary = "Reset workspace data by ID")
-    public ResponseEntity<Map<String, Object>> resetWorkspaceById(@PathVariable Long id) {
-        return ResponseEntity.ok(workspaceService.resetWorkspaceData(id));
+    @Operation(summary = "Reset workspace data by ID (temporarily disabled; always returns 403)")
+    public ResponseEntity<Map<String, Object>> resetWorkspaceById(@PathVariable String id) {
+        throw new ResponseStatusException(HttpStatus.FORBIDDEN, RESET_DISABLED_MESSAGE);
     }
 }
 

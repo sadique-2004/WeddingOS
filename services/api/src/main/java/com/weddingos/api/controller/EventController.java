@@ -22,7 +22,7 @@ public class EventController {
 
     @GetMapping
     @Operation(summary = "List all ceremonies sorted by date and sequence")
-    public ResponseEntity<List<WeddingEvent>> getEvents(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<List<WeddingEvent>> getEvents(@RequestParam Long weddingId) {
         return ResponseEntity.ok(eventService.getEvents(weddingId));
     }
 
@@ -34,7 +34,7 @@ public class EventController {
 
     @PostMapping
     @Operation(summary = "Add a new ceremony to the wedding itinerary")
-    public ResponseEntity<WeddingEvent> createEvent(@RequestParam(defaultValue = "1") Long weddingId,
+    public ResponseEntity<WeddingEvent> createEvent(@RequestParam Long weddingId,
                                                     @RequestBody WeddingEvent event) {
         return ResponseEntity.ok(eventService.createEvent(weddingId, event));
     }

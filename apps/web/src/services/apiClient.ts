@@ -4,16 +4,27 @@ const API_BASE_URL =
     ? 'https://weddingos-api.onrender.com/api/v1'
     : 'http://localhost:8080/api/v1')
 
+// Returns the active wedding ID, or 0 when none is selected.
+// Never falls back to wedding 1: 0 makes API calls fail instead of reading another wedding's data.
 export function getActiveWeddingId(): number {
   try {
     const raw = localStorage.getItem('weddingos_active_wedding')
     if (raw) {
       const parsed = JSON.parse(raw)
       const id = Number(parsed.id)
-      if (id && !isNaN(id)) return id
+      if (Number.isInteger(id) && id > 0) return id
     }
   } catch {}
-  return 1
+  return 0
+}
+
+// Resolves an explicit or active wedding ID and runs the call; rejects when no wedding is selected.
+function withWedding<T>(weddingId: number | null | undefined, call: (wid: number) => Promise<T>): Promise<T> {
+  const wid = weddingId || getActiveWeddingId()
+  if (!Number.isInteger(wid) || wid <= 0) {
+    return Promise.reject(new Error('No active wedding workspace is selected.'))
+  }
+  return call(wid)
 }
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -116,13 +127,13 @@ export const workspaceApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  updateBudget: (totalBudgetTarget: number, weddingId?: number) => {
-    const wid = weddingId ?? getActiveWeddingId()
-    return request<any>(`/workspaces/budget?weddingId=${wid}`, {
-      method: 'PUT',
-      body: JSON.stringify({ totalBudgetTarget, weddingId: wid }),
-    })
-  },
+  updateBudget: (totalBudgetTarget: number, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<any>(`/workspaces/budget?weddingId=${wid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ totalBudgetTarget, weddingId: wid }),
+      })
+    ),
   updateDetails: (
     details: {
       brideName: string
@@ -133,25 +144,20 @@ export const workspaceApi = {
       slug?: string
     },
     weddingId?: number
-  ) => {
-    const wid = weddingId ?? getActiveWeddingId()
-    return request<any>(`/workspaces/details?weddingId=${wid}`, {
-      method: 'PUT',
-      body: JSON.stringify({ ...details, weddingId: wid }),
-    })
-  },
-  reset: async (weddingId?: number) => {
-    const wid = weddingId ?? getActiveWeddingId()
-    try {
-      return await request<WorkspaceSummary>(`/workspaces/${wid}/reset`, {
+  ) =>
+    withWedding(weddingId, (wid) =>
+      request<any>(`/workspaces/details?weddingId=${wid}`, {
+        method: 'PUT',
+        body: JSON.stringify({ ...details, weddingId: wid }),
+      })
+    ),
+  // The backend currently rejects resets with 403; the error is surfaced to the caller.
+  reset: (weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<WorkspaceSummary>(`/workspaces/${wid}/reset`, {
         method: 'POST',
       })
-    } catch {
-      return await request<WorkspaceSummary>(`/workspaces/reset?weddingId=${wid}`, {
-        method: 'POST',
-      })
-    }
-  },
+    ),
 }
 export const workspacesApi = workspaceApi
 
@@ -176,12 +182,15 @@ export interface BackendWeddingEvent {
 }
 
 export const eventsApi = {
-  getAll: (weddingId = 1) => request<BackendWeddingEvent[]>(`/events?weddingId=${weddingId}`),
-  create: (data: Partial<BackendWeddingEvent>, weddingId = 1) =>
-    request<BackendWeddingEvent>(`/events?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendWeddingEvent[]>(`/events?weddingId=${wid}`)),
+  create: (data: Partial<BackendWeddingEvent>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendWeddingEvent>(`/events?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   update: (id: number, data: Partial<BackendWeddingEvent>) =>
     request<BackendWeddingEvent>(`/events/${id}`, {
       method: 'PUT',
@@ -208,17 +217,15 @@ export interface BackendTask {
 }
 
 export const tasksApi = {
-  getAll: (weddingId?: number) => {
-    const wid = weddingId ?? getActiveWeddingId()
-    return request<BackendTask[]>(`/tasks?weddingId=${wid}`)
-  },
-  create: (data: Partial<BackendTask>, weddingId?: number) => {
-    const wid = weddingId ?? getActiveWeddingId()
-    return request<BackendTask>(`/tasks?weddingId=${wid}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    })
-  },
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendTask[]>(`/tasks?weddingId=${wid}`)),
+  create: (data: Partial<BackendTask>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendTask>(`/tasks?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   update: (id: number, data: Partial<BackendTask>) =>
     request<BackendTask>(`/tasks/${id}`, {
       method: 'PUT',
@@ -261,12 +268,15 @@ export interface InvitationsResponse {
 }
 
 export const invitationsApi = {
-  getAll: (weddingId = 1) => request<InvitationsResponse>(`/invitations?weddingId=${weddingId}`),
-  create: (data: Partial<BackendInvitation>, weddingId = 1) =>
-    request<BackendInvitation>(`/invitations?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<InvitationsResponse>(`/invitations?weddingId=${wid}`)),
+  create: (data: Partial<BackendInvitation>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendInvitation>(`/invitations?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   update: (id: number, data: Partial<BackendInvitation>) =>
     request<BackendInvitation>(`/invitations/${id}`, {
       method: 'PUT',
@@ -315,14 +325,19 @@ export interface CheckInResult {
 }
 
 export const checkInApi = {
-  search: (query: string, weddingId = 1) =>
-    request<BackendInvitation[]>(`/check-in/search?weddingId=${weddingId}&q=${encodeURIComponent(query)}`),
-  scan: (token: string, attendeeCount?: number, checkedInBy = 'Desk Coordinator', weddingId = 1) =>
-    request<CheckInResult>(`/check-in/scan?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify({ token, attendeeCount, checkedInBy }),
-    }),
-  getLogs: (weddingId = 1) => request<CheckInLog[]>(`/check-in/logs?weddingId=${weddingId}`),
+  search: (query: string, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendInvitation[]>(`/check-in/search?weddingId=${wid}&q=${encodeURIComponent(query)}`)
+    ),
+  scan: (token: string, attendeeCount?: number, checkedInBy = 'Desk Coordinator', weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<CheckInResult>(`/check-in/scan?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify({ token, attendeeCount, checkedInBy }),
+      })
+    ),
+  getLogs: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<CheckInLog[]>(`/check-in/logs?weddingId=${wid}`)),
 }
 
 // ---------------- Team Members & RBAC ----------------
@@ -351,7 +366,8 @@ export interface BackendMembership {
 }
 
 export const membersApi = {
-  getAll: (weddingId = 1) => request<BackendMembership[]>(`/members?weddingId=${weddingId}`),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendMembership[]>(`/members?weddingId=${wid}`)),
   invite: (
     payload: {
       fullName: string
@@ -359,12 +375,14 @@ export const membersApi = {
       role: 'ADMIN' | 'ORGANIZER'
       title?: string
     },
-    weddingId = 1
+    weddingId?: number
   ) =>
-    request<BackendMembership>(`/members/invite?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+    withWedding(weddingId, (wid) =>
+      request<BackendMembership>(`/members/invite?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      })
+    ),
   updateRole: (membershipId: number, role: 'ADMIN' | 'ORGANIZER') =>
     request<BackendMembership>(`/members/${membershipId}/role`, {
       method: 'PUT',
@@ -399,12 +417,15 @@ export interface BackendExpense {
 }
 
 export const expensesApi = {
-  getAll: (weddingId = 1) => request<BackendExpense[]>(`/expenses?weddingId=${weddingId}`),
-  create: (data: Partial<BackendExpense>, weddingId = 1) =>
-    request<BackendExpense>(`/expenses?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendExpense[]>(`/expenses?weddingId=${wid}`)),
+  create: (data: Partial<BackendExpense>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendExpense>(`/expenses?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   update: (id: number, data: Partial<BackendExpense>) =>
     request<BackendExpense>(`/expenses/${id}`, {
       method: 'PUT',
@@ -433,12 +454,15 @@ export interface BackendVendor {
 }
 
 export const vendorsApi = {
-  getAll: (weddingId = 1) => request<BackendVendor[]>(`/vendors?weddingId=${weddingId}`),
-  create: (data: Partial<BackendVendor>, weddingId = 1) =>
-    request<BackendVendor>(`/vendors?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendVendor[]>(`/vendors?weddingId=${wid}`)),
+  create: (data: Partial<BackendVendor>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendVendor>(`/vendors?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   update: (id: number, data: Partial<BackendVendor>) =>
     request<BackendVendor>(`/vendors/${id}`, {
       method: 'PUT',
@@ -465,13 +489,17 @@ export interface BackendWebsiteConfig {
 }
 
 export const websiteApi = {
-  getConfig: (weddingId = 1) => request<BackendWebsiteConfig>(`/website?weddingId=${weddingId}`),
-  updateConfig: (data: Partial<BackendWebsiteConfig>, weddingId = 1) =>
-    request<BackendWebsiteConfig>(`/website?weddingId=${weddingId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  getPublic: (slug: string) => request<any>(`/public/w/${slug}`),
+  getConfig: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendWebsiteConfig>(`/website?weddingId=${wid}`)),
+  updateConfig: (data: Partial<BackendWebsiteConfig>, weddingId?: number) =>
+    withWedding(weddingId, (wid) =>
+      request<BackendWebsiteConfig>(`/website?weddingId=${wid}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      })
+    ),
+  // Unknown slugs return 404; the response includes the wedding's own weddingId.
+  getPublic: (slug: string) => request<any>(`/public/w/${encodeURIComponent(slug)}`),
 }
 
 // ---------------- Gallery & Moderation ----------------
@@ -488,27 +516,35 @@ export interface BackendGalleryPhoto {
 }
 
 export const galleryApi = {
-  getAll: (weddingId = 1) => request<BackendGalleryPhoto[]>(`/gallery?weddingId=${weddingId}`),
-  getModerationQueue: (weddingId = 1) => request<BackendGalleryPhoto[]>(`/gallery/moderation?weddingId=${weddingId}`),
+  getAll: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendGalleryPhoto[]>(`/gallery?weddingId=${wid}`)),
+  getModerationQueue: (weddingId?: number) =>
+    withWedding(weddingId, (wid) => request<BackendGalleryPhoto[]>(`/gallery/moderation?weddingId=${wid}`)),
   upload: (
     data: {
       photoUrl: string
       caption?: string
       uploadedByName?: string
     },
-    weddingId = 1
+    weddingId?: number
   ) =>
-    request<BackendGalleryPhoto>(`/gallery/upload?weddingId=${weddingId}`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+    withWedding(weddingId, (wid) =>
+      request<BackendGalleryPhoto>(`/gallery/upload?weddingId=${wid}`, {
+        method: 'POST',
+        body: JSON.stringify(data),
+      })
+    ),
   uploadFile: async (
     file: File,
     params: { weddingId?: number; caption?: string; ceremonyTag?: string; uploaderName?: string } = {}
   ): Promise<BackendGalleryPhoto> => {
+    const wid = params.weddingId || getActiveWeddingId()
+    if (!Number.isInteger(wid) || wid <= 0) {
+      throw new Error('No active wedding workspace is selected.')
+    }
     const formData = new FormData()
     formData.append('file', file)
-    if (params.weddingId) formData.append('weddingId', String(params.weddingId))
+    formData.append('weddingId', String(wid))
     if (params.caption) formData.append('caption', params.caption)
     if (params.ceremonyTag) formData.append('ceremonyTag', params.ceremonyTag)
     if (params.uploaderName) formData.append('uploaderName', params.uploaderName)

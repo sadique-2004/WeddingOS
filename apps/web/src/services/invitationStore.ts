@@ -5,11 +5,12 @@ const STORAGE_KEY = 'weddingos_family_invitations'
 const LOGS_STORAGE_KEY = 'weddingos_checkin_logs'
 
 function getActiveWeddingId(): number {
+  // 0 = no active wedding (never fall back to wedding 1)
   try {
     const raw = localStorage.getItem('weddingos_active_wedding')
-    if (raw) return Number(JSON.parse(raw).id) || 1
+    if (raw) return Number(JSON.parse(raw).id) || 0
   } catch {}
-  return 1
+  return 0
 }
 
 function getStorageKey(wid: number): string {

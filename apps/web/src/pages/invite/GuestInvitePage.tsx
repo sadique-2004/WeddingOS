@@ -13,7 +13,7 @@ import {
 import QRCode from 'qrcode'
 import { resolveInvitation, getInvitations, saveInvitations } from '../../services/invitationStore'
 import type { FamilyInvitation } from '../../types/invitation'
-import { workspacesApi } from '../../services/apiClient'
+import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 
 export default function GuestInvitePage() {
   const { token } = useParams<{ token: string }>()
@@ -54,7 +54,7 @@ export default function GuestInvitePage() {
       }
 
       try {
-        const active = await workspacesApi.getActive(1)
+        const active = await workspacesApi.getActive(getActiveWeddingId() || undefined)
         if (active) {
           setWedding({
             brideName: active.brideName || '',

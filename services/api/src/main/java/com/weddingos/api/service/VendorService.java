@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.VendorContact;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.VendorContactRepository;
@@ -31,14 +32,14 @@ public class VendorService {
 
     public VendorContact createVendor(Long weddingId, VendorContact vendor) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         vendor.setWedding(wedding);
         return vendorRepository.save(vendor);
     }
 
     public VendorContact updateVendor(Long id, VendorContact updates) {
         VendorContact existing = vendorRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Vendor not found: " + id));
+                .orElseThrow(() -> new NotFoundException("Vendor not found: " + id));
 
         if (updates.getBusinessName() != null) existing.setBusinessName(updates.getBusinessName());
         if (updates.getContactPerson() != null) existing.setContactPerson(updates.getContactPerson());

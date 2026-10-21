@@ -36,7 +36,7 @@ import {
 import { Button } from '../../components/ui/Button'
 import { Badge } from '../../components/ui/Badge'
 import { Card, CardContent } from '../../components/ui/Card'
-import { galleryApi, workspacesApi } from '../../services/apiClient'
+import { galleryApi, workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 
 export type ModerationStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
 export type CeremonyCategory =
@@ -132,7 +132,7 @@ export default function GalleryPage() {
       }
 
       try {
-        const active = await workspacesApi.getActive(1)
+        const active = await workspacesApi.getActive(getActiveWeddingId() || undefined)
         if (active) {
           setWedding({
             brideName: active.brideName || '',
@@ -208,8 +208,8 @@ export default function GalleryPage() {
     async function fetchBackendPhotos() {
       try {
         const [approvedRes, pendingRes] = await Promise.allSettled([
-          galleryApi.getAll(1),
-          galleryApi.getModerationQueue(1)
+          galleryApi.getAll(),
+          galleryApi.getModerationQueue()
         ])
 
         const dbPhotos: GalleryPhoto[] = []
@@ -433,7 +433,6 @@ export default function GalleryPage() {
     if (selectedRawFile) {
       try {
         const backendResult = await galleryApi.uploadFile(selectedRawFile, {
-          weddingId: 1,
           caption: uploadTitle.trim(),
           ceremonyTag: uploadCeremony,
           uploaderName: uploaderName.trim() || 'Organizer',

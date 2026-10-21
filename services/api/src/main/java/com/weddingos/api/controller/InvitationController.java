@@ -22,14 +22,14 @@ public class InvitationController {
 
     @GetMapping("/invitations")
     @Operation(summary = "Get all family invitations with attendance metrics")
-    public ResponseEntity<Map<String, Object>> getInvitations(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<Map<String, Object>> getInvitations(@RequestParam Long weddingId) {
         return ResponseEntity.ok(invitationService.getInvitationsWithMetrics(weddingId));
     }
 
     @PostMapping("/invitations")
     @Operation(summary = "Create a new family invitation unit")
     public ResponseEntity<FamilyInvitation> createInvitation(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody FamilyInvitation invitation) {
         return ResponseEntity.ok(invitationService.createInvitation(weddingId, invitation));
     }

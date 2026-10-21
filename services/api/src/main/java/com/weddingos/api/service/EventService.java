@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.model.WeddingEvent;
 import com.weddingos.api.repository.WeddingEventRepository;
@@ -29,19 +30,19 @@ public class EventService {
     @Transactional(readOnly = true)
     public WeddingEvent getEventById(Long eventId) {
         return eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Ceremony event not found with ID: " + eventId));
+                .orElseThrow(() -> new NotFoundException("Ceremony event not found with ID: " + eventId));
     }
 
     public WeddingEvent createEvent(Long weddingId, WeddingEvent event) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         event.setWedding(wedding);
         return eventRepository.save(event);
     }
 
     public WeddingEvent updateEvent(Long eventId, WeddingEvent updates) {
         WeddingEvent existing = eventRepository.findById(eventId)
-                .orElseThrow(() -> new IllegalArgumentException("Event not found: " + eventId));
+                .orElseThrow(() -> new NotFoundException("Event not found: " + eventId));
         
         if (updates.getName() != null) existing.setName(updates.getName());
         if (updates.getDescription() != null) existing.setDescription(updates.getDescription());

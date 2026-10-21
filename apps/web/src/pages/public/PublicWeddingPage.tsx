@@ -16,7 +16,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 import type { PublicWebsiteConfig } from '../../types/website'
-import { websiteApi, workspacesApi } from '../../services/apiClient'
+import { websiteApi } from '../../services/apiClient'
 export type { PublicWebsiteConfig } from '../../types/website'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
@@ -180,17 +180,7 @@ export default function PublicWeddingPage({
           }
         }
 
-        const activeWorkspace = await workspacesApi.getActive(1).catch(() => null)
-        if (activeWorkspace) {
-          setConfig((prev) => ({
-            ...prev,
-            brideName: activeWorkspace.brideName || prev.brideName,
-            groomName: activeWorkspace.groomName || prev.groomName,
-            weddingDate: activeWorkspace.weddingDate || prev.weddingDate,
-            locationName: activeWorkspace.venueName || activeWorkspace.city || prev.locationName,
-            slug: activeWorkspace.slug || prev.slug,
-          }))
-        }
+        // Unknown or missing slug: do not fall back to another wedding's data (previously wedding 1).
       } catch (err) {
         console.warn('Could not load public wedding data from backend:', err)
       }

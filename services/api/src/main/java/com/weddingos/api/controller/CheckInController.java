@@ -25,7 +25,7 @@ public class CheckInController {
     @GetMapping("/search")
     @Operation(summary = "Search family invitations by name or phone for manual check-in")
     public ResponseEntity<List<FamilyInvitation>> searchFamilies(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestParam(required = false) String q) {
         return ResponseEntity.ok(checkInService.searchFamilies(weddingId, q));
     }
@@ -33,7 +33,7 @@ public class CheckInController {
     @PostMapping("/scan")
     @Operation(summary = "Verify QR token, admit family and detect duplicate entry attempts (FR-CHECK-04)")
     public ResponseEntity<Map<String, Object>> scanAndCheckIn(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody Map<String, Object> payload) {
         String token = (String) payload.get("token");
         Integer count = payload.containsKey("attendeeCount") ? Integer.parseInt(payload.get("attendeeCount").toString()) : null;
@@ -43,7 +43,7 @@ public class CheckInController {
 
     @GetMapping("/logs")
     @Operation(summary = "Get live check-in audit logs")
-    public ResponseEntity<List<CheckInLog>> getLogs(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<List<CheckInLog>> getLogs(@RequestParam Long weddingId) {
         return ResponseEntity.ok(checkInService.getRecentLogs(weddingId));
     }
 }

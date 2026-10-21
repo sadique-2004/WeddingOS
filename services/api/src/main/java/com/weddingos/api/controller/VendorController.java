@@ -23,7 +23,7 @@ public class VendorController {
     @GetMapping
     @Operation(summary = "Get list of vendors with optional category filtering")
     public ResponseEntity<List<VendorContact>> getVendors(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestParam(required = false) String category) {
         return ResponseEntity.ok(vendorService.getVendors(weddingId, category));
     }
@@ -31,7 +31,7 @@ public class VendorController {
     @PostMapping
     @Operation(summary = "Register a new vendor in the workspace")
     public ResponseEntity<VendorContact> createVendor(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody VendorContact vendor) {
         return ResponseEntity.ok(vendorService.createVendor(weddingId, vendor));
     }

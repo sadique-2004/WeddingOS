@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.PreparationTask;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.PreparationTaskRepository;
@@ -34,7 +35,7 @@ public class TaskService {
 
     public PreparationTask createTask(Long weddingId, PreparationTask task) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         task.setWedding(wedding);
         if (task.getCategory() == null || task.getCategory().isBlank()) {
             task.setCategory("General");
@@ -50,7 +51,7 @@ public class TaskService {
 
     public PreparationTask toggleStatus(Long taskId) {
         PreparationTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+                .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
         
         if (task.getStatus() == PreparationTask.Status.COMPLETED) {
             task.setStatus(PreparationTask.Status.TODO);
@@ -62,7 +63,7 @@ public class TaskService {
 
     public PreparationTask updateTask(Long taskId, PreparationTask updates) {
         PreparationTask task = taskRepository.findById(taskId)
-                .orElseThrow(() -> new IllegalArgumentException("Task not found: " + taskId));
+                .orElseThrow(() -> new NotFoundException("Task not found: " + taskId));
 
         if (updates.getTitle() != null) task.setTitle(updates.getTitle());
         if (updates.getCategory() != null) task.setCategory(updates.getCategory());

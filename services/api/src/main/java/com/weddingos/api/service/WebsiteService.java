@@ -1,5 +1,7 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.BadRequestException;
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.model.WeddingEvent;
 import com.weddingos.api.model.WeddingSlug;
@@ -39,7 +41,7 @@ public class WebsiteService {
         return websiteRepository.findByWeddingId(weddingId)
                 .orElseGet(() -> {
                     Wedding wedding = weddingRepository.findById(weddingId)
-                            .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                            .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
                     WeddingWebsite site = new WeddingWebsite();
                     site.setWedding(wedding);
                     site.setWelcomeHeadline("Celebrating the Sacred Union of " + wedding.getBrideName() + " & " + wedding.getGroomName());
@@ -66,30 +68,21 @@ public class WebsiteService {
 
     @Transactional(readOnly = true)
     public Map<String, Object> getPublicWebsiteBySlug(String slug) {
-        WeddingSlug weddingSlug = slugRepository.findBySlugAndIsActiveTrue(slug)
-                .orElseGet(() -> slugRepository.findAll().stream().findFirst().orElse(null));
-
-        Wedding wedding;
-        if (weddingSlug != null) {
-            wedding = weddingSlug.getWedding();
-        } else {
-            wedding = weddingRepository.findAll().stream().findFirst().orElseGet(() -> {
-                Wedding w = new Wedding();
-                w.setBrideName("");
-                w.setGroomName("");
-                w.setWeddingDate(null);
-                w.setCity("");
-                w.setVenueName("");
-                w.setTotalBudgetTarget(java.math.BigDecimal.ZERO);
-                return weddingRepository.save(w);
-            });
+        if (slug == null || slug.isBlank()) {
+            throw new BadRequestException("slug is required.");
         }
+        // Unknown or inactive slugs are a 404 — never fall back to another wedding's site.
+        WeddingSlug weddingSlug = slugRepository.findBySlugAndIsActiveTrue(slug.trim())
+                .orElseThrow(() -> new NotFoundException("Wedding website not found for slug: " + slug));
+        Wedding wedding = weddingSlug.getWedding();
 
         WeddingWebsite site = getWebsiteConfig(wedding.getId());
         List<WeddingEvent> events = eventRepository.findByWeddingIdOrderByEventDateAscSequenceOrderAsc(wedding.getId());
 
         Map<String, Object> data = new HashMap<>();
-        data.put("slug", slug);
+        data.put("slug", weddingSlug.getSlug());
+        // Lets public pages (e.g. guest gallery) scope their calls to this wedding instead of a hardcoded ID
+        data.put("weddingId", wedding.getId());
         data.put("brideName", wedding.getBrideName());
         data.put("groomName", wedding.getGroomName());
         data.put("weddingDate", wedding.getWeddingDate());

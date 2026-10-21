@@ -23,14 +23,14 @@ public class MemberController {
 
     @GetMapping
     @Operation(summary = "Get team roster with roles and module permissions")
-    public ResponseEntity<List<WeddingMembership>> getMembers(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<List<WeddingMembership>> getMembers(@RequestParam Long weddingId) {
         return ResponseEntity.ok(memberService.getMembers(weddingId));
     }
 
     @PostMapping("/invite")
     @Operation(summary = "Invite a new organizer to the wedding workspace")
     public ResponseEntity<WeddingMembership> inviteMember(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody Map<String, String> payload) {
         String fullName = payload.get("fullName");
         String email = payload.get("email");

@@ -23,7 +23,7 @@ public class TaskController {
     @GetMapping
     @Operation(summary = "Get preparation tasks with optional category or status filters")
     public ResponseEntity<List<PreparationTask>> getTasks(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestParam(required = false) String category,
             @RequestParam(required = false) PreparationTask.Status status) {
         return ResponseEntity.ok(taskService.getTasks(weddingId, category, status));
@@ -32,7 +32,7 @@ public class TaskController {
     @PostMapping
     @Operation(summary = "Create a new preparation task")
     public ResponseEntity<PreparationTask> createTask(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody PreparationTask task) {
         return ResponseEntity.ok(taskService.createTask(weddingId, task));
     }

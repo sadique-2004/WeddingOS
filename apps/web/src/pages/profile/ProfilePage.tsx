@@ -23,7 +23,7 @@ import {
   Check,
 } from 'lucide-react'
 import { Card, CardContent } from '../../components/ui/Card'
-import { workspacesApi } from '../../services/apiClient'
+import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 import { resetToDemoData } from '../../services/invitationStore'
 import { resetMembershipDemoData } from '../../services/membershipStore'
 
@@ -224,15 +224,12 @@ export default function ProfilePage() {
   // 3. Reset All Data Handler
   const handleResetWorkspace = async () => {
     setIsResetting(true)
-    const wid = profile.id || 1
+    const wid = profile.id || getActiveWeddingId()
 
     try {
-      // Backend MySQL DB Reset
-      try {
-        await workspacesApi.reset(Number(wid) || 1)
-      } catch (err) {
-        console.warn('Backend reset call encountered error, proceeding with local clean:', err)
-      }
+      // Backend MySQL DB Reset. If it fails (reset is currently disabled server-side, 403),
+      // stop here so local data is not wiped and no false success is shown.
+      await workspacesApi.reset(Number(wid))
 
       // Local storage clean
       const keysToClear = [
@@ -259,7 +256,7 @@ export default function ProfilePage() {
       keysToClear.forEach((k) => localStorage.removeItem(k))
 
       resetToDemoData()
-      resetMembershipDemoData(Number(wid) || 1)
+      resetMembershipDemoData(Number(wid))
 
       const cleanProfile: WeddingProfileData = {
         id: wid,

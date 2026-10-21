@@ -1,5 +1,6 @@
 package com.weddingos.api.service;
 
+import com.weddingos.api.exception.NotFoundException;
 import com.weddingos.api.model.GalleryPhoto;
 import com.weddingos.api.model.Wedding;
 import com.weddingos.api.repository.GalleryPhotoRepository;
@@ -35,7 +36,7 @@ public class GalleryService {
 
     public GalleryPhoto uploadGuestPhoto(Long weddingId, GalleryPhoto photo) {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
         photo.setWedding(wedding);
         photo.setModerationStatus(GalleryPhoto.ModerationStatus.PENDING);
         return photoRepository.save(photo);
@@ -43,7 +44,7 @@ public class GalleryService {
 
     public GalleryPhoto uploadPhotoFile(Long weddingId, org.springframework.web.multipart.MultipartFile file, String caption, String ceremonyTag, String uploaderName) throws java.io.IOException {
         Wedding wedding = weddingRepository.findById(weddingId)
-                .orElseThrow(() -> new IllegalArgumentException("Wedding not found: " + weddingId));
+                .orElseThrow(() -> new NotFoundException("Wedding not found: " + weddingId));
 
         String secureUrl = cloudinaryService.uploadImage(file, "weddingos/photos");
 
@@ -59,14 +60,14 @@ public class GalleryService {
 
     public GalleryPhoto moderatePhoto(Long photoId, GalleryPhoto.ModerationStatus decision) {
         GalleryPhoto photo = photoRepository.findById(photoId)
-                .orElseThrow(() -> new IllegalArgumentException("Photo not found: " + photoId));
+                .orElseThrow(() -> new NotFoundException("Photo not found: " + photoId));
         photo.setModerationStatus(decision);
         return photoRepository.save(photo);
     }
 
     public GalleryPhoto toggleHighlight(Long photoId) {
         GalleryPhoto photo = photoRepository.findById(photoId)
-                .orElseThrow(() -> new IllegalArgumentException("Photo not found: " + photoId));
+                .orElseThrow(() -> new NotFoundException("Photo not found: " + photoId));
         photo.setIsHighlight(!photo.getIsHighlight());
         return photoRepository.save(photo);
     }

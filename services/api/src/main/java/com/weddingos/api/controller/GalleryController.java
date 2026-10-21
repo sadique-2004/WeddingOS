@@ -23,20 +23,20 @@ public class GalleryController {
 
     @GetMapping
     @Operation(summary = "Get approved wedding photos visible to guests")
-    public ResponseEntity<List<GalleryPhoto>> getApprovedPhotos(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<List<GalleryPhoto>> getApprovedPhotos(@RequestParam Long weddingId) {
         return ResponseEntity.ok(galleryService.getApprovedPhotos(weddingId));
     }
 
     @GetMapping("/moderation")
     @Operation(summary = "Get pending photo moderation queue for organizers")
-    public ResponseEntity<List<GalleryPhoto>> getModerationQueue(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<List<GalleryPhoto>> getModerationQueue(@RequestParam Long weddingId) {
         return ResponseEntity.ok(galleryService.getPendingModerationQueue(weddingId));
     }
 
     @PostMapping("/upload")
     @Operation(summary = "Guest photo contribution (placed into moderation queue)")
     public ResponseEntity<GalleryPhoto> uploadPhoto(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody GalleryPhoto photo) {
         return ResponseEntity.ok(galleryService.uploadGuestPhoto(weddingId, photo));
     }
@@ -44,7 +44,7 @@ public class GalleryController {
     @PostMapping(value = "/upload-file", consumes = org.springframework.http.MediaType.MULTIPART_FORM_DATA_VALUE)
     @Operation(summary = "Upload image file directly to Cloudinary and register in wedding gallery")
     public ResponseEntity<GalleryPhoto> uploadPhotoFile(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestParam("file") org.springframework.web.multipart.MultipartFile file,
             @RequestParam(required = false) String caption,
             @RequestParam(required = false, defaultValue = "Guest Candids") String ceremonyTag,

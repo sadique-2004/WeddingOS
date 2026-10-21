@@ -22,14 +22,14 @@ public class WebsiteController {
 
     @GetMapping("/website")
     @Operation(summary = "Get wedding website studio configuration and theme")
-    public ResponseEntity<WeddingWebsite> getWebsiteConfig(@RequestParam(defaultValue = "1") Long weddingId) {
+    public ResponseEntity<WeddingWebsite> getWebsiteConfig(@RequestParam Long weddingId) {
         return ResponseEntity.ok(websiteService.getWebsiteConfig(weddingId));
     }
 
     @PutMapping("/website")
     @Operation(summary = "Update website theme, welcome headline, copy and livestream URL")
     public ResponseEntity<WeddingWebsite> updateWebsiteConfig(
-            @RequestParam(defaultValue = "1") Long weddingId,
+            @RequestParam Long weddingId,
             @RequestBody WeddingWebsite config) {
         return ResponseEntity.ok(websiteService.updateWebsiteConfig(weddingId, config));
     }

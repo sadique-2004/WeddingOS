@@ -343,14 +343,11 @@ export default function DashboardPage() {
   // Master Reset All Data Handler
   const handleResetAllData = async () => {
     setIsResetting(true)
-    const wid = wedding.id || 1
+    const wid = wedding.id || getActiveWeddingId()
     try {
-      // 1. Reset in MySQL backend
-      try {
-        await workspacesApi.reset(wid)
-      } catch (err) {
-        console.warn('Backend reset call encountered error, proceeding with local clean:', err)
-      }
+      // 1. Reset in MySQL backend. If it fails (reset is currently disabled server-side, 403),
+      // stop here so local data is not wiped and no false success is shown.
+      await workspacesApi.reset(wid)
 
       // 2. Clear all related localStorage items for this wedding
       const keysToClear = [
