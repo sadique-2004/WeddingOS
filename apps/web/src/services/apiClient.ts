@@ -520,10 +520,13 @@ export interface BackendVendor {
   contactPerson?: string
   phone?: string
   email?: string
-  quotedAmount: number
-  paidAmount: number
-  balanceDue: number
-  status: 'SHORTLISTED' | 'CONTACTED' | 'CONTRACT_SENT' | 'CONFIRMED' | 'DELIVERED'
+  totalContractValue?: number
+  advancePaid?: number
+  paymentStage?: 'PENDING' | 'PARTIALLY_PAID' | 'SETTLED'
+  quotedAmount?: number
+  paidAmount?: number
+  balanceDue?: number
+  status?: string
   notes?: string
 }
 

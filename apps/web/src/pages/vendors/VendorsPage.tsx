@@ -145,12 +145,40 @@ const CATEGORY_META: Record<
   },
 }
 
-const INITIAL_VENDORS: VendorContact[] = []
+interface VendorExtraMeta {
+  role?: string
+  address?: string
+  websiteUrl?: string
+  ceremony?: string
+}
 
+function packVendorNotes(notes: string, meta: VendorExtraMeta): string {
+  const cleanNotes = notes.replace(/\s*\[Meta:.*?\]\s*/g, '').trim()
+  const hasMeta = meta.role || meta.address || meta.websiteUrl || meta.ceremony
+  if (!hasMeta) return cleanNotes
+  const metaObj: Record<string, string> = {}
+  if (meta.role) metaObj.role = meta.role
+  if (meta.address) metaObj.address = meta.address
+  if (meta.websiteUrl) metaObj.websiteUrl = meta.websiteUrl
+  if (meta.ceremony) metaObj.ceremony = meta.ceremony
+  return cleanNotes ? `${cleanNotes}\n[Meta: ${JSON.stringify(metaObj)}]` : `[Meta: ${JSON.stringify(metaObj)}]`
+}
+
+function unpackVendorNotes(rawNotes?: string): { cleanNotes: string; meta: VendorExtraMeta } {
+  if (!rawNotes) return { cleanNotes: '', meta: {} }
+  const match = rawNotes.match(/\[Meta:\s*(\{.*?\})\]/)
+  if (!match) return { cleanNotes: rawNotes.trim(), meta: {} }
+  try {
+    const meta = JSON.parse(match[1]) as VendorExtraMeta
+    const cleanNotes = rawNotes.replace(/\[Meta:\s*\{.*?\}\]/, '').trim()
+    return { cleanNotes, meta }
+  } catch {
+    return { cleanNotes: rawNotes.trim(), meta: {} }
+  }
+}
 
 export default function VendorsPage() {
   const getActiveWeddingId = (): number => {
-    // 0 = no active wedding (never fall back to wedding 1)
     try {
       const stored = localStorage.getItem('weddingos_active_wedding')
       if (stored) {
@@ -165,36 +193,65 @@ export default function VendorsPage() {
 
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
   const [vendors, setVendors] = useState<VendorContact[]>([])
+  const [isLoading, setIsLoading] = useState<boolean>(false)
+  const [isSaving, setIsSaving] = useState<boolean>(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
   const loadVendors = async (wid: number) => {
+    if (!wid) {
+      setVendors([])
+      return
+    }
     const storageKey = `weddingos_${wid}_vendors`
+    setIsLoading(true)
+    setLoadError(null)
+
     try {
       const backendVendors = await vendorsApi.getAll(wid)
       if (backendVendors && Array.isArray(backendVendors)) {
-        const mapped: VendorContact[] = backendVendors.map((bv) => ({
-          id: String(bv.id),
-          name: bv.businessName,
-          category: (bv.category as VendorCategory) || 'Other',
-          contactPerson: bv.contactPerson || '',
-          phoneNumber: bv.phone || '',
-          email: bv.email || '',
-          agreedCost: bv.quotedAmount || 0,
-          currencyCode: 'INR',
-          contractStatus:
-            bv.status === 'CONFIRMED'
-              ? 'CONFIRMED'
-              : bv.status === 'DELIVERED'
-              ? 'COMPLETED'
-              : 'IN_DISCUSSION',
-          relatedCeremony: 'All Ceremonies',
-          notes: bv.notes || '',
-        }))
+        const mapped: VendorContact[] = backendVendors.map((bv: any) => {
+          const { cleanNotes, meta } = unpackVendorNotes(bv.notes)
+
+          let contractStatus: VendorContact['contractStatus'] = 'IN_DISCUSSION'
+          const rawStage = String(bv.paymentStage || bv.status || '').toUpperCase()
+          if (rawStage === 'SETTLED' || rawStage === 'DELIVERED' || rawStage === 'COMPLETED') {
+            contractStatus = 'COMPLETED'
+          } else if (rawStage === 'PARTIALLY_PAID' || rawStage === 'CONFIRMED' || rawStage === 'CONTRACT_SENT') {
+            contractStatus = 'CONFIRMED'
+          } else {
+            contractStatus = 'IN_DISCUSSION'
+          }
+
+          const contractCost = Number(bv.totalContractValue ?? bv.quotedAmount ?? 0)
+
+          return {
+            id: String(bv.id),
+            name: bv.businessName || 'Unnamed Vendor',
+            category: (bv.category as VendorCategory) || 'Other',
+            contactPerson: bv.contactPerson || '',
+            contactRole: meta.role || '',
+            phoneNumber: bv.phone || '',
+            email: bv.email || '',
+            address: meta.address || '',
+            websiteUrl: meta.websiteUrl || '',
+            agreedCost: contractCost,
+            currencyCode: 'INR',
+            contractStatus,
+            relatedCeremony: meta.ceremony || 'All Ceremonies',
+            notes: cleanNotes || '',
+          }
+        })
+
         setVendors(mapped)
         localStorage.setItem(storageKey, JSON.stringify(mapped))
         return
       }
-    } catch {
-      // ignore
+    } catch (err: any) {
+      console.warn('Backend vendors load failed, trying local cache:', err)
+      setLoadError(err?.message || 'Could not connect to backend server.')
+    } finally {
+      setIsLoading(false)
     }
 
     const cached = localStorage.getItem(storageKey)
@@ -226,6 +283,7 @@ export default function VendorsPage() {
       window.removeEventListener('weddingos_active_wedding_changed', handleUpdate)
     }
   }, [])
+
   const [searchTerm, setSearchTerm] = useState('')
   const [categoryFilter, setCategoryFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
@@ -322,6 +380,7 @@ export default function VendorsPage() {
 
   const openAddModal = () => {
     setEditingVendor(null)
+    setSaveError(null)
     setFormData({
       name: '',
       category: 'Decor & Production',
@@ -342,6 +401,7 @@ export default function VendorsPage() {
 
   const openEditModal = (v: VendorContact) => {
     setEditingVendor(v)
+    setSaveError(null)
     setFormData({
       name: v.name,
       category: v.category,
@@ -362,71 +422,92 @@ export default function VendorsPage() {
 
   const handleDelete = async (id: string, name: string) => {
     if (confirm(`Remove vendor partner "${name}" from your active directory?`)) {
+      const wid = weddingId || getActiveWeddingId()
       const numId = Number(id)
-      if (!isNaN(numId)) {
-        await vendorsApi.delete(numId).catch(() => {})
-      }
+
+      // Optimistically update local view & cache
       const updated = vendors.filter((v) => v.id !== id)
       setVendors(updated)
-      localStorage.setItem(`weddingos_${weddingId}_vendors`, JSON.stringify(updated))
+      localStorage.setItem(`weddingos_${wid}_vendors`, JSON.stringify(updated))
+
+      if (!isNaN(numId)) {
+        try {
+          await vendorsApi.delete(numId)
+        } catch (err: any) {
+          console.error('Failed to delete vendor on backend:', err)
+          alert(`Backend deletion failed: ${err?.message || 'Check database connection'}`)
+          await loadVendors(wid)
+        }
+      }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    let updated: VendorContact[] = []
-    if (editingVendor) {
-      const numId = Number(editingVendor.id)
-      if (!isNaN(numId)) {
-        await vendorsApi
-          .update(numId, {
-            businessName: formData.name,
-            category: formData.category,
-            contactPerson: formData.contactPerson,
-            phone: formData.phoneNumber,
-            email: formData.email,
-            quotedAmount: formData.agreedCost,
-            notes: formData.notes,
-          })
-          .catch(() => {})
-      }
-      updated = vendors.map((v) =>
-        v.id === editingVendor.id
-          ? {
-              ...v,
-              ...formData,
-            }
-          : v
-      )
-    } else {
-      let createdId = `ven-${Date.now()}`
-      try {
-        const saved = await vendorsApi.create(
-          {
-            businessName: formData.name,
-            category: formData.category,
-            contactPerson: formData.contactPerson,
-            phone: formData.phoneNumber,
-            email: formData.email,
-            quotedAmount: formData.agreedCost,
-            status: formData.contractStatus as any,
-            notes: formData.notes,
-          },
-          weddingId
-        )
-        if (saved?.id) createdId = String(saved.id)
-      } catch {
-        // ignore
-      }
-      const newVendor: VendorContact = {
-        id: createdId,
-        ...formData,
-      }
-      updated = [newVendor, ...vendors]
+    setIsSaving(true)
+    setSaveError(null)
+
+    const wid = weddingId || getActiveWeddingId()
+    if (!wid) {
+      setSaveError('No active wedding selected. Please select a wedding first.')
+      setIsSaving(false)
+      return
     }
-    setVendors(updated)
-    localStorage.setItem(`weddingos_${weddingId}_vendors`, JSON.stringify(updated))
-    setIsModalOpen(false)
+
+    let paymentStage: 'PENDING' | 'PARTIALLY_PAID' | 'SETTLED' = 'PENDING'
+    if (formData.contractStatus === 'COMPLETED') {
+      paymentStage = 'SETTLED'
+    } else if (formData.contractStatus === 'CONFIRMED') {
+      paymentStage = 'PARTIALLY_PAID'
+    } else {
+      paymentStage = 'PENDING'
+    }
+
+    const totalContractValue = Number(formData.agreedCost) || 0
+    const advancePaid =
+      paymentStage === 'SETTLED'
+        ? totalContractValue
+        : paymentStage === 'PARTIALLY_PAID'
+        ? Math.round(totalContractValue * 0.3)
+        : 0
+
+    const packedNotes = packVendorNotes(formData.notes, {
+      role: formData.contactRole,
+      address: formData.address,
+      websiteUrl: formData.websiteUrl,
+      ceremony: formData.relatedCeremony,
+    })
+
+    const payload = {
+      businessName: formData.name.trim(),
+      category: formData.category,
+      contactPerson: formData.contactPerson.trim() || formData.name.trim() || 'Vendor Contact',
+      phone: formData.phoneNumber.trim() || 'N/A',
+      email: formData.email.trim() || undefined,
+      totalContractValue,
+      advancePaid,
+      paymentStage,
+      notes: packedNotes,
+    }
+
+    try {
+      if (editingVendor) {
+        const numId = Number(editingVendor.id)
+        if (!isNaN(numId)) {
+          await vendorsApi.update(numId, payload)
+        }
+      } else {
+        await vendorsApi.create(payload, wid)
+      }
+
+      await loadVendors(wid)
+      setIsModalOpen(false)
+    } catch (err: any) {
+      console.error('Failed saving vendor to backend:', err)
+      setSaveError(err?.message || 'Could not save vendor to database. Please check all required fields.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const getStatusBadge = (status: VendorContact['contractStatus']) => {
@@ -474,14 +555,22 @@ export default function VendorsPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={openAddModal}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#520411] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-md transition-all cursor-pointer shrink-0"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Add Vendor Partner</span>
-        </button>
+        <div className="flex items-center gap-2">
+          {isLoading && (
+            <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#fdf5ea] border border-[#e6bd81]/40 text-[#85531d] text-[11px] font-medium">
+              <span className="w-3 h-3 border-2 border-[#85531d] border-t-transparent rounded-full animate-spin shrink-0" />
+              <span>Syncing...</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={openAddModal}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-[#6f0617] hover:bg-[#520411] active:scale-[0.98] text-white text-xs sm:text-sm font-semibold shadow-md transition-all cursor-pointer shrink-0"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Add Vendor Partner</span>
+          </button>
+        </div>
       </div>
 
       {/* ========================================= */}
@@ -974,8 +1063,16 @@ export default function VendorsPage() {
         </div>
       )}
 
+      {/* Loading Skeleton / Indicator */}
+      {isLoading && filteredVendors.length === 0 && (
+        <div className="bg-white rounded-2xl border border-[#e6bd81]/40 p-12 text-center space-y-3">
+          <div className="w-8 h-8 border-3 border-[#6f0617] border-t-transparent rounded-full animate-spin mx-auto" />
+          <p className="text-xs text-neutral-500 font-medium">Connecting to Palace Database...</p>
+        </div>
+      )}
+
       {/* Empty State */}
-      {filteredVendors.length === 0 && (
+      {!isLoading && filteredVendors.length === 0 && (
         <div className="bg-white rounded-2xl border border-[#e6bd81]/40 p-10 text-center space-y-3">
           <Building2 className="w-10 h-10 text-neutral-300 mx-auto" />
           <h4 className="text-base font-bold text-neutral-700">No vendor partners found</h4>
@@ -1218,20 +1315,37 @@ export default function VendorsPage() {
                 />
               </div>
 
+              {/* Save Error Alert */}
+              {saveError && (
+                <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center gap-2">
+                  <X className="w-4 h-4 shrink-0 text-red-500" />
+                  <span>{saveError}</span>
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] disabled:opacity-50 text-white text-xs font-semibold shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {editingVendor ? 'Save Changes' : 'Confirm Partner Onboarding'}
+                  {isSaving ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Saving to Database...</span>
+                    </>
+                  ) : (
+                    <span>{editingVendor ? 'Save Changes' : 'Confirm Partner Onboarding'}</span>
+                  )}
                 </button>
               </div>
 
