@@ -604,6 +604,7 @@ export interface PublicInvitation {
   weddingDate?: string
   city?: string
   venueName?: string
+  slug?: string
 }
 
 export interface PublicPhoto {

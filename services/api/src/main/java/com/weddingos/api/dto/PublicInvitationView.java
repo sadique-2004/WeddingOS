@@ -23,9 +23,34 @@ public record PublicInvitationView(
         String groomName,
         LocalDate weddingDate,
         String city,
-        String venueName
+        String venueName,
+        String slug
 ) {
+    public PublicInvitationView(
+            String invitationToken,
+            String displayName,
+            String primaryContactName,
+            String circle,
+            Integer maxAttendees,
+            Integer actualAttendees,
+            String rsvpStatus,
+            String dietaryNotes,
+            boolean checkedIn,
+            String brideName,
+            String groomName,
+            LocalDate weddingDate,
+            String city,
+            String venueName
+    ) {
+        this(invitationToken, displayName, primaryContactName, circle, maxAttendees, actualAttendees,
+                rsvpStatus, dietaryNotes, checkedIn, brideName, groomName, weddingDate, city, venueName, null);
+    }
+
     public static PublicInvitationView of(FamilyInvitation inv) {
+        return of(inv, null);
+    }
+
+    public static PublicInvitationView of(FamilyInvitation inv, String slug) {
         Wedding w = inv.getWedding();
         return new PublicInvitationView(
                 inv.getInvitationToken(),
@@ -41,7 +66,8 @@ public record PublicInvitationView(
                 w != null ? w.getGroomName() : null,
                 w != null ? w.getWeddingDate() : null,
                 w != null ? w.getCity() : null,
-                w != null ? w.getVenueName() : null
+                w != null ? w.getVenueName() : null,
+                slug
         );
     }
 }

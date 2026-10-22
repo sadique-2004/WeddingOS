@@ -17,15 +17,26 @@ import java.util.*;
 
 import static com.weddingos.api.security.WeddingAccessService.weddingIdOf;
 
+import com.weddingos.api.model.WeddingSlug;
+import com.weddingos.api.repository.WeddingSlugRepository;
+
 @Service
 @Transactional
 public class InvitationService {
 
     private final FamilyInvitationRepository invitationRepository;
+    private final WeddingSlugRepository slugRepository;
     private final WeddingAccessService access;
 
     public InvitationService(FamilyInvitationRepository invitationRepository, WeddingAccessService access) {
+        this(invitationRepository, null, access);
+    }
+
+    public InvitationService(FamilyInvitationRepository invitationRepository,
+                             WeddingSlugRepository slugRepository,
+                             WeddingAccessService access) {
         this.invitationRepository = invitationRepository;
+        this.slugRepository = slugRepository;
         this.access = access;
     }
 
@@ -101,9 +112,19 @@ public class InvitationService {
                 .orElseThrow(() -> new NotFoundException("Invitation not found for the supplied token."));
     }
 
+    private String resolveSlug(FamilyInvitation inv) {
+        if (inv != null && inv.getWedding() != null && slugRepository != null) {
+            return slugRepository.findByWeddingId(inv.getWedding().getId())
+                    .map(WeddingSlug::getSlug)
+                    .orElse(null);
+        }
+        return null;
+    }
+
     @Transactional(readOnly = true)
     public PublicInvitationView getPublicInvitation(String token) {
-        return PublicInvitationView.of(findByToken(token));
+        FamilyInvitation inv = findByToken(token);
+        return PublicInvitationView.of(inv, resolveSlug(inv));
     }
 
     public PublicInvitationView submitRsvp(String token, Integer actualAttendees, FamilyInvitation.RsvpStatus status, String dietaryNotes) {
@@ -128,7 +149,8 @@ public class InvitationService {
             invitation.setDietaryNotes(dietaryNotes.length() > 2000 ? dietaryNotes.substring(0, 2000) : dietaryNotes);
         }
 
-        return PublicInvitationView.of(invitationRepository.save(invitation));
+        FamilyInvitation saved = invitationRepository.save(invitation);
+        return PublicInvitationView.of(saved, resolveSlug(saved));
     }
 
     public Map<String, String> generateWhatsAppMessage(Long invitationId, String baseUrl) {
