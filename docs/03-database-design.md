@@ -3,7 +3,7 @@
 > **Document ID:** `DOC-03`  
 > **Status:** Production Relational Schema  
 > **Database:** MySQL 8.0+ / TiDB Serverless | **Engine:** InnoDB | **Encoding:** `utf8mb4`  
-> **Reference File:** [schema.sql](file:///d:/Build_With__AI_TapAcademy/WeddingOS/schema.sql) | Original `docs/DBDD.md`
+> **Reference File:** [schema.sql](file:///d:/Build_With__AI_TapAcademy/WeddingOS/schema.sql) (302 lines of production MySQL DDL)
 
 ---
 

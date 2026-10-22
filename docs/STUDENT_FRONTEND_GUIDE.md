@@ -20,12 +20,14 @@ By following this guide step-by-step with your AI assistant (Antigravity):
 
 Before running any prompts, make sure you have the following assets and documentation in place:
 
-### 1. Documentation in `/docs`
-Your instructor has provided you with:
-- `PRD.md`: Complete product requirements and features.
-- `DESIGN_SYSTEM.md`: Royal luxury colors, font rules, and layout specs.
-- `DBDD.md`: Data concepts and schemas.
-- `API_DESIGN.md`: Endpoints and data flow.
+### 1. Master Documentation in `/docs`
+Your curriculum provides complete architectural specifications:
+- `01-product-requirements.md`: Complete product requirements, user personas, and acceptance criteria.
+- `02-system-architecture.md`: Full-stack system design, component boundaries, and Clerk auth flows.
+- `03-database-design.md`: Production MySQL 8.0 relational schema and invariants.
+- `04-api-design.md`: REST API endpoints catalog and request/response contracts.
+- `05-ui-design-system.md`: Royal luxury colors, font rules, and layout tokens.
+- `BACKEND_SPRING_BOOT_GUIDE.md`: Spring Boot 3.3.4 & MySQL enterprise backend setup.
 
 ### 2. Static Assets in `apps/web/public/`
 Verify these files are in `apps/web/public/`:
@@ -520,20 +522,27 @@ Build apps/web/src/pages/settings/SettingsPage.tsx following PRD § 8.1 & § 7.1
 
 ---
 
-### 🤖 Prompt #17: Guest Digital Pass & Live QR Code (`/invite/:token`)
+### 🤖 Prompt #17: Guest Digital Pass & Intent-First RSVP (`/invite/:token`)
 **Copy & paste this prompt to Antigravity:**
 
 ```text
 Build apps/web/src/pages/invite/GuestInvitePage.tsx matching PRD § 7.6 & § 7.13:
-1. Read the :token route param and find the family in invitationStore.
-2. Digital Pass Card:
-   - Displays Family Name, Allowed Guest Limit, and a live QR code generated in real-time using 'qrcode' library containing their invitation token.
-3. RSVP Form:
-   - Radio buttons: 'Joyfully Accept' vs 'Regretfully Decline'.
+1. Read the :token route param and find the family via invitationStore (or publicApi).
+2. Intent-First Royal Invitation Screen (Zero Initial QR Code!):
+   - Display a regal royal invitation card featuring Bride & Groom names, Wedding Date, Venue, and warm ceremonial welcome note.
+   - Present two clear, prominent intent buttons: "Joyfully Accept" and "Regretfully Decline".
+   - CRITICAL REQUIREMENT: Do NOT display any QR code on initial load.
+3. Interactive RSVP Form (On Clicking "Joyfully Accept"):
    - Attending Headcount selector (dropdown from 1 up to maxAttendees).
    - Dietary preferences (Strict Jain Vegetarian, Traditional Vegetarian, Halal, Vegan).
-   - Ceremony attendance checkboxes (Haldi, Mehendi, Sangeet, Pheras, Reception).
-4. Submitting updates invitationStore and presents a royal confirmation screen with confetti.
+   - Optional ceremony attendance notes.
+   - "Confirm My Attendance" submit button.
+4. Unlock Digital Pass on Acceptance:
+   - When confirmed (status = ATTENDING), hide redundant buttons and form fields.
+   - Reveal the luxury digital gate admission pass featuring the scannable QR code generated via 'qrcode' library.
+   - Display confirmed guest count and a direct button linking to the couple's public wedding website (`/w/:slug`) so guests can explore the full itinerary.
+5. Gracious Decline Flow:
+   - If "Regretfully Decline" is selected, transition to a warm, appreciative acknowledgment screen with zero QR pass.
 ```
 
 ---
@@ -543,14 +552,17 @@ Build apps/web/src/pages/invite/GuestInvitePage.tsx matching PRD § 7.6 & § 7.1
 
 ```text
 Build apps/web/src/pages/public/PublicWeddingPage.tsx:
-1. Dynamically read active theme from website settings (Royal Udaipur wine/gold, Emerald Palace, or Marigold Festive).
-2. Sections:
+1. Dynamically update document title to "[Bride] & [Groom] Wedding | WeddingOS" for SEO and browser tabs.
+2. Read active theme from website settings (Royal Udaipur wine/gold, Emerald Palace, or Marigold Festive).
+3. Synchronized Ceremonies: Dynamically render the exact ceremonial events created in the Events module (/app/events) with dates, times, venues, and Google Maps links without manual duplication.
+4. Sections:
    - Editorial Hero: Couple portrait, ceremonial title, and ticking countdown clock.
    - Couple Welcome Note & Love Story.
    - Ceremonies Schedule: Sequence cards with dates, timings, venues, and Google Maps links.
    - Traditional Dress Code Guide with attire palette swatches.
    - Virtual Livestream player (if enabled).
    - 'Share a Memory' button opening guest photo upload modal.
+5. In WebsiteStudioPage.tsx, integrate automatic unique vanity slug generation (e.g. ananya-rohan-2026) with real-time debounced availability verification against GET /api/v1/public/w/:slug/available.
 ```
 
 ---
@@ -613,4 +625,4 @@ npx oxlint apps/web/src
 ---
 
 ## 🎉 Congratulations!
-You now have a 100% complete, visually stunning, enterprise-grade frontend application. You are ready to transition to the **Backend (PostgreSQL, Prisma, and API Services)** phase!
+You now have a 100% complete, visually stunning, enterprise-grade frontend application. You are ready to transition to the **Backend (Java 21, Spring Boot 3.3.4, Spring Data JPA, and MySQL 8.0)** phase following [`docs/BACKEND_SPRING_BOOT_GUIDE.md`](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/BACKEND_SPRING_BOOT_GUIDE.md) and [`docs/04-api-design.md`](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/04-api-design.md)!

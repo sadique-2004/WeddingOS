@@ -95,6 +95,8 @@ All technical specifications, architectural designs, and teaching materials are 
 | [**DOC-13**](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/13-feature-implementation-plan.md) | **Feature Implementation Plan** | 12 vertical slices from requirements to Git checkpoints. |
 | [**DOC-14**](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/14-ai-prompt-library.md) | **AI Prompt Library** | 25+ copy-paste ready engineering prompts with review follow-ups. |
 | [**DOC-15**](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/15-dependencies-and-integrations.md) | **Dependencies & Integrations** | Free-tier cloud accounts, API keys, and environment variables. |
+| [**STUDENT GUIDE**](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/STUDENT_FRONTEND_GUIDE.md) | **Student Frontend Build Guide** | Hands-on 20-prompt curriculum to build the exact luxury React 19 client. |
+| [**BACKEND GUIDE**](file:///d:/Build_With__AI_TapAcademy/WeddingOS/docs/BACKEND_SPRING_BOOT_GUIDE.md) | **Spring Boot 3 & MySQL Guide** | Production Java 21 REST API architecture, invariants, and local running. |
 
 ---
 
@@ -102,13 +104,13 @@ All technical specifications, architectural designs, and teaching materials are 
 
 1. **Executive Dashboard (`/app`):** Countdown clock, upcoming ceremony preview, real-time RSVP counts, and budget runway.
 2. **Ceremonial Itinerary (`/app/events`):** Timeline sequence for Haldi, Mehendi, Sangeet, Pheras, and Reception with dress codes and Google Maps links.
-3. **Family-Based Guest Invitations (`/app/invitations`):** Household-level invitations, headcounts, dietary notes, and one-click WhatsApp invitation links.
-4. **Digital Guest Pass (`/invite/:token`):** Zero-login personal invitation pass with RSVP submission and dynamic QR entry pass.
+3. **Family-Based Guest Invitations (`/app/invitations`):** Household-level invitations, headcounts, dietary notes, and one-click WhatsApp invitation links with full CRUD.
+4. **Digital Guest Pass & Intent-First RSVP (`/invite/:token`):** Zero-login personal invitation card, intent-first 2-button RSVP (no QR initially), conditional gate QR pass reveal upon acceptance, and wedding website link.
 5. **Front-Desk QR Check-In Desk (`/app/check-in`):** Camera scanner powered by `html5-qrcode`, household verification, and duplicate scan prevention alerts.
-6. **Tasks & Checklist (`/app/tasks`):** Drag-and-drop Kanban board with priority badges (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
-7. **Budget & Expense Ledger (`/app/expenses`):** Target budget ceiling, itemized transaction ledger, and advance payment calculations.
-8. **Vendor Directory (`/app/vendors`):** Phone directory and quotation ledgers for caterers, decorators, and photographers.
-9. **Website Studio (`/app/website` & `/w/:slug`):** Personal wedding website generator with 3 royal themes, profile sync, and live preview.
+6. **Tasks & Checklist (`/app/tasks`):** Drag-and-drop Kanban board with priority badges (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) and pre-seeded Indian wedding logistics generator.
+7. **Budget & Expense Ledger (`/app/expenses`):** Target budget ceiling, itemized transaction ledger, advance payment calculations, and full CRUD.
+8. **Vendor Directory (`/app/vendors`):** Phone directory and quotation ledgers for caterers, decorators, and photographers with full CRUD.
+9. **Website Studio & Public Portal (`/app/website` & `/w/:slug`):** Personal wedding website builder with 3 royal themes, profile sync, synchronized ceremony timeline, dynamic unique slug generator with real-time conflict checking, and dynamic SEO titles.
 10. **Crowdsourced Photo Gallery (`/app/gallery` & `/gallery/:token`):** Guest photo uploads via link/QR with organizer moderation queue (`PENDING` -> `APPROVED`).
 11. **Team Roles & Permissions (`/app/members`):** Admin vs Organizer roles with an 8-module permission matrix and Last-Admin protection.
 12. **Profile & Settings (`/app/profile`):** Couple details (Bride, Groom, Date, Venue), multi-device cloud synchronization, and workspace reset.

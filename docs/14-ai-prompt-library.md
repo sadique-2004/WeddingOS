@@ -204,6 +204,68 @@ Each prompt in this library is designed using **Senior Engineering Prompt Archit
 
 ---
 
+### Prompt 11b: Dynamic Unique Slug Generation & Conflict Checking
+- **Role:** Senior Full-Stack Engineer
+- **Context:** `apps/web/src/pages/website/WebsiteStudioPage.tsx` and `docs/04-api-design.md`
+- **Prompt:**
+  ```text
+  Act as a Senior Full-Stack Engineer. In WebsiteStudioPage.tsx, implement dynamic vanity slug generation and real-time conflict checking:
+  1. Add a "Generate Unique Slug" button that derives a clean, URL-safe slug from couple names (e.g., "ananya-rohan-2026" or "ananya-rohan-7821").
+  2. Implement debounced (400ms) availability checking calling websiteApi.checkSlugAvailable(slug, activeWeddingId).
+  3. Visual Feedback:
+     - Checking: Spinner with "Checking availability...".
+     - Free: Green badge "✓ Available for your wedding".
+     - Current: Info badge "ℹ Currently claimed by your wedding".
+     - Taken: Red warning badge "✕ Already taken by another wedding".
+  4. Prevent form submission and display an alert banner if saving a conflicting slug (handling HTTP 409 Conflict gracefully).
+  ```
+
+---
+
+### Prompt 11c: Intent-First 2-Button RSVP & Conditional Gate Pass Unlock
+- **Role:** Senior Frontend Engineer
+- **Context:** `apps/web/src/pages/invite/GuestInvitePage.tsx` and `docs/01-product-requirements.md` (FR-PASS-01 to 06)
+- **Prompt:**
+  ```text
+  Act as a Senior Frontend React Engineer. In apps/web/src/pages/invite/GuestInvitePage.tsx, build the Intent-First RSVP and conditional pass unlock flow:
+  1. Initial View (Zero QR Code!):
+     - Display an ornate, luxury Indian wedding invitation card featuring Bride & Groom names, Wedding Date, Venue, and warm ceremonial welcome.
+     - Present two primary intent buttons: "Joyfully Accept" and "Regretfully Decline".
+     - Absolutely do NOT display any QR code on initial load.
+  2. RSVP Headcount & Dietary Selection (On "Joyfully Accept"):
+     - Attending headcount dropdown (1 to maxAttendees).
+     - Dietary preference pills (Jain Vegetarian, Pure Veg, Halal, Vegan).
+     - "Confirm Attendance & Unlock Digital Pass" action button.
+  3. Digital Gate Pass Reveal:
+     - On submitting attendance (status = 'ATTENDING'), hide previous buttons and forms.
+     - Reveal the royal digital gate pass with a scannable live QR code generated via 'qrcode'.
+     - Display confirmed attendee count, gate admission instructions, and a prominent button: "Explore Wedding Website & Ceremony Schedule" linking directly to /w/:slug.
+  4. Decline Acknowledgement:
+     - If "Regretfully Decline" is clicked, display a gracious, warm thank-you message with zero QR pass.
+  ```
+
+---
+
+### Prompt 11d: Pre-Seeded Indian Wedding Logistics Tasks Generator
+- **Role:** Frontend Systems Engineer
+- **Context:** `apps/web/src/pages/tasks/TasksPage.tsx`
+- **Prompt:**
+  ```text
+  Act as a Systems Engineer. In TasksPage.tsx, provide a "Populate Real-World Wedding Tasks" action for organizers:
+  1. Add a secondary toolbar button with a Sparkles icon: "Seed Wedding Tasks".
+  2. Generate 8 realistic Indian wedding logistics items:
+     - "Confirm 180 Peach Safas with Turban Master" (Category: Attire, Priority: HIGH, Ceremony: Pheras)
+     - "Finalize 4 Bridal Mehendi Artists & Cone Stock" (Category: Mehendi, Priority: HIGH, Ceremony: Mehendi)
+     - "Book 2 Punjabi Dhol Players for Baraat Assembly" (Category: Entertainment, Priority: CRITICAL, Ceremony: Baraat)
+     - "Arrange 120 Royal Welcome Hampers for Guest Rooms" (Category: Logistics, Priority: MEDIUM)
+     - "Stage Sound & Lighting Dry Run" (Category: Venue, Priority: CRITICAL, Ceremony: Sangeet)
+     - "Reconfirm Fresh Jasmine Garlands with Mandap Florist" (Category: Decor, Priority: HIGH, Ceremony: Pheras)
+  3. Ensure each task includes realistic vendor instructions, phone contacts, and target due dates.
+  4. Automatically synchronize to tasksApi.create or local task store.
+  ```
+
+---
+
 ### Prompt 12: Private Photo Gallery & Moderation Flow
 - **Role:** Full-Stack Cloud Engineer
 - **Context:** `services/api/src/main/java/com/weddingos/api/controller/GalleryController.java` and `schema.sql`
