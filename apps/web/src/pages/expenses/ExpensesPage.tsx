@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { expensesApi, workspacesApi } from '../../services/apiClient'
+import { expensesApi, workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 import {
   DollarSign,
   TrendingUp,
@@ -66,20 +66,6 @@ const INITIAL_EXPENSES: Expense[] = []
 
 
 export default function ExpensesPage() {
-  const getActiveWeddingId = (): number => {
-    // 0 = no active wedding (never fall back to wedding 1)
-    try {
-      const stored = localStorage.getItem('weddingos_active_wedding')
-      if (stored) {
-        const parsed = JSON.parse(stored)
-        return Number(parsed.id) || 0
-      }
-    } catch {
-      // ignore
-    }
-    return 0
-  }
-
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
   const [totalBudget, setTotalBudget] = useState<number>(() => {
     try {
@@ -107,6 +93,8 @@ export default function ExpensesPage() {
   })
 
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [isSaving, setIsSaving] = useState(false)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   const loadExpenses = async (wid: number) => {
     // 1. Load actual workspace budget target set by Admin
@@ -137,14 +125,14 @@ export default function ExpensesPage() {
         const mapped: Expense[] = res.expenses.map((be: any) => ({
           id: String(be.id),
           title: be.title,
-          amount: Number(be.actualAmount || be.plannedAmount || 0),
-          currencyCode: 'INR',
-          expenseDate: be.paymentDate || new Date().toISOString().split('T')[0],
+          amount: Number(be.amount ?? be.actualAmount ?? be.plannedAmount ?? 0),
+          currencyCode: be.currencyCode || 'INR',
+          expenseDate: be.expenseDate || be.paymentDate || new Date().toISOString().split('T')[0],
           category: (be.category as ExpenseCategory) || 'Other',
           relatedCeremony: 'All Ceremonies',
           vendorName: be.vendorName || '',
-          paymentStatus: (be.status as any) || 'PAID',
-          paymentMethod: 'NEFT / RTGS',
+          paymentStatus: (be.paymentStatus as any) || (be.status as any) || 'PAID',
+          paymentMethod: be.paymentMethod || 'NEFT / RTGS',
           notes: be.notes || '',
         }))
         setExpenses(mapped)
@@ -296,6 +284,7 @@ export default function ExpensesPage() {
 
   const openAddModal = () => {
     setEditingExpense(null)
+    setSaveError(null)
     setFormData({
       title: '',
       amount: 50000,
@@ -313,11 +302,12 @@ export default function ExpensesPage() {
 
   const openEditModal = (item: Expense) => {
     setEditingExpense(item)
+    setSaveError(null)
     setFormData({
       title: item.title,
       amount: item.amount,
-      currencyCode: item.currencyCode,
-      expenseDate: item.expenseDate,
+      currencyCode: item.currencyCode || 'INR',
+      expenseDate: item.expenseDate || new Date().toISOString().split('T')[0],
       category: item.category,
       relatedCeremony: item.relatedCeremony || 'All Ceremonies',
       vendorName: item.vendorName || '',
@@ -330,70 +320,56 @@ export default function ExpensesPage() {
 
   const handleDelete = async (id: string, title: string) => {
     if (confirm(`Remove expense record "${title}"?`)) {
-      const numId = Number(id)
-      if (!isNaN(numId)) {
-        await expensesApi.delete(numId).catch(() => {})
-      }
+      const wid = weddingId || getActiveWeddingId()
       const updated = expenses.filter((e) => e.id !== id)
       setExpenses(updated)
-      localStorage.setItem(`weddingos_${weddingId}_expenses`, JSON.stringify(updated))
+      localStorage.setItem(`weddingos_${wid}_expenses`, JSON.stringify(updated))
+
+      const numId = Number(id)
+      if (!isNaN(numId)) {
+        try {
+          await expensesApi.delete(numId)
+        } catch (err) {
+          console.warn('Backend expense delete failed, keeping local removal:', err)
+        }
+      }
     }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    let updated: Expense[] = []
-    if (editingExpense) {
-      const numId = Number(editingExpense.id)
-      if (!isNaN(numId)) {
-        await expensesApi
-          .update(numId, {
-            title: formData.title,
-            category: formData.category,
-            plannedAmount: formData.amount,
-            actualAmount: formData.amount,
-            vendorName: formData.vendorName,
-            notes: formData.notes,
-          })
-          .catch(() => {})
-      }
-      updated = expenses.map((item) =>
-        item.id === editingExpense.id
-          ? {
-              ...item,
-              ...formData,
-            }
-          : item
-      )
-    } else {
-      let createdId = `exp-${Date.now()}`
-      try {
-        const saved = await expensesApi.create(
-          {
-            title: formData.title,
-            category: formData.category,
-            plannedAmount: formData.amount,
-            actualAmount: formData.amount,
-            vendorName: formData.vendorName,
-            status: formData.paymentStatus as any,
-            notes: formData.notes,
-          },
-          weddingId
-        )
-        if (saved?.id) createdId = String(saved.id)
-      } catch {
-        // ignore
-      }
+    setIsSaving(true)
+    setSaveError(null)
+    const wid = weddingId || getActiveWeddingId()
 
-      const newExpense: Expense = {
-        id: createdId,
-        ...formData,
-      }
-      updated = [newExpense, ...expenses]
+    const payload = {
+      title: formData.title,
+      category: formData.category,
+      amount: Number(formData.amount),
+      currencyCode: formData.currencyCode || 'INR',
+      expenseDate: formData.expenseDate || new Date().toISOString().split('T')[0],
+      paymentStatus: formData.paymentStatus,
+      paymentMethod: formData.paymentMethod,
+      notes: formData.notes,
     }
-    setExpenses(updated)
-    localStorage.setItem(`weddingos_${weddingId}_expenses`, JSON.stringify(updated))
-    setIsModalOpen(false)
+
+    try {
+      if (editingExpense) {
+        const numId = Number(editingExpense.id)
+        if (!isNaN(numId)) {
+          await expensesApi.update(numId, payload)
+        }
+      } else {
+        await expensesApi.create(payload, wid)
+      }
+      await loadExpenses(wid)
+      setIsModalOpen(false)
+    } catch (err: any) {
+      console.error('Failed saving expense to database:', err)
+      setSaveError(err?.message || 'Could not save expense to database. Please check connection.')
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   const handleUpdateBudget = async (e: React.FormEvent) => {
@@ -1092,20 +1068,29 @@ export default function ExpensesPage() {
                 />
               </div>
 
+              {/* Error Notice */}
+              {saveError && (
+                <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs leading-relaxed">
+                  <strong>Save Failed:</strong> {saveError}
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex items-center justify-end gap-3 pt-3 border-t border-neutral-100">
                 <button
                   type="button"
+                  disabled={isSaving}
                   onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer"
+                  className="px-4 py-2 rounded-lg border border-neutral-300 text-xs font-medium text-neutral-700 hover:bg-neutral-50 cursor-pointer disabled:opacity-50"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] text-white text-xs font-semibold shadow-md transition-all cursor-pointer"
+                  disabled={isSaving}
+                  className="px-5 py-2 rounded-lg bg-[#6f0617] hover:bg-[#520411] disabled:opacity-60 text-white text-xs font-semibold shadow-md transition-all cursor-pointer flex items-center gap-2"
                 >
-                  {editingExpense ? 'Save Changes' : 'Record Transaction'}
+                  {isSaving ? 'Saving to Database...' : editingExpense ? 'Save Changes' : 'Record Transaction'}
                 </button>
               </div>
 

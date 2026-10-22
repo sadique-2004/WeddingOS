@@ -460,22 +460,39 @@ export const membersApi = {
 export interface BackendExpense {
   id: number
   weddingId?: number
-  category: string
   title: string
-  plannedAmount: number
-  actualAmount: number
-  paidAmount: number
-  dueAmount: number
-  status: 'PENDING' | 'PARTIALLY_PAID' | 'PAID'
+  category: string
+  amount: number
+  currencyCode?: string
+  expenseDate: string
+  paymentStatus: 'PAID' | 'ADVANCE_PAID' | 'PENDING'
+  paymentMethod?: string
+  notes?: string
+  plannedAmount?: number
+  actualAmount?: number
+  paidAmount?: number
+  dueAmount?: number
+  status?: string
   vendorName?: string
   invoiceNumber?: string
   paymentDate?: string
-  notes?: string
+}
+
+export interface ExpensesResponse {
+  expenses: BackendExpense[]
+  totalBudget: number
+  totalRecorded: number
+  totalPaid: number
+  totalPendingDues: number
+  remainingBudget: number
+  utilizationPercentage: number
+  categoryBreakdown: { category: string; amount: number; percentage: number }[]
+  currencyCode: string
 }
 
 export const expensesApi = {
   getAll: (weddingId?: number) =>
-    withWedding(weddingId, (wid) => request<BackendExpense[]>(`/expenses?weddingId=${wid}`)),
+    withWedding(weddingId, (wid) => request<ExpensesResponse>(`/expenses?weddingId=${wid}`)),
   create: (data: Partial<BackendExpense>, weddingId?: number) =>
     withWedding(weddingId, (wid) =>
       request<BackendExpense>(`/expenses?weddingId=${wid}`, {
