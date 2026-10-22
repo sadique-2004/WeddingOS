@@ -88,14 +88,21 @@ export default function OrganizerLayout() {
             totalBudgetTarget: active.totalBudgetTarget || 0,
             userEmail: email,
           }
+          const prevRaw = localStorage.getItem('weddingos_active_wedding')
+          let prevId: number | null = null
+          try {
+            if (prevRaw) prevId = Number(JSON.parse(prevRaw).id)
+          } catch {}
+
           setWedding(updated)
           localStorage.setItem('weddingos_active_wedding', JSON.stringify(updated))
           if (email) {
             localStorage.setItem(userScopeKey, JSON.stringify(updated))
           }
-          // Notify child pages (Events, Expenses, Tasks, Vendors) that active wedding ID is established
-          window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
-          window.dispatchEvent(new Event('weddingos_wedding_updated'))
+
+          if (prevId !== null && active.id && active.id !== prevId) {
+            window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+          }
         }
       } catch (err) {
         console.warn('Could not sync user workspace:', err)

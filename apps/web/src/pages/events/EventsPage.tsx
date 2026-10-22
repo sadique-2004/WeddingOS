@@ -75,7 +75,7 @@ export default function EventsPage() {
       }
     } catch (err) {
       console.warn('Backend events fetch error/offline:', err)
-      setEvents([])
+      // Keep previously loaded events intact during brief network interruptions to avoid flickering
     } finally {
       setLoading(false)
     }
@@ -88,8 +88,13 @@ export default function EventsPage() {
 
     const handleUpdate = () => {
       const newWid = getActiveWeddingId()
-      setWeddingId(newWid)
-      loadEvents(newWid)
+      setWeddingId((prev) => {
+        if (prev !== newWid) {
+          loadEvents(newWid)
+          return newWid
+        }
+        return prev
+      })
     }
     window.addEventListener('weddingos_wedding_updated', handleUpdate)
     window.addEventListener('weddingos_active_wedding_changed', handleUpdate)
