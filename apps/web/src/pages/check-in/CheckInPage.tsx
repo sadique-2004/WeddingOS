@@ -38,6 +38,7 @@ import {
   undoCheckIn,
   getCheckInLogs,
   resetToDemoData,
+  syncInvitationsFromBackend,
 } from '../../services/invitationStore'
 import { workspacesApi, getActiveWeddingId } from '../../services/apiClient'
 
@@ -109,8 +110,12 @@ export default function CheckInPage() {
 
   // Load initial data
   const refreshData = () => {
-    setInvitations(getInvitations())
+    const wid = getActiveWeddingId()
+    setInvitations(getInvitations(wid))
     setRecentLogs(getCheckInLogs())
+    syncInvitationsFromBackend(wid).then((synced) => {
+      setInvitations(synced)
+    })
   }
 
   useEffect(() => {

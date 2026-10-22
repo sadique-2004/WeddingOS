@@ -22,7 +22,8 @@ import {
   QrCode,
 } from 'lucide-react'
 import type { FamilyInvitation } from '../../types/invitation'
-import { getInvitations, saveInvitations } from '../../services/invitationStore'
+import { getInvitations, saveInvitations, syncInvitationsFromBackend } from '../../services/invitationStore'
+import { invitationsApi, getActiveWeddingId } from '../../services/apiClient'
 
 const INITIAL_INVITATIONS: FamilyInvitation[] = [
   {
@@ -111,17 +112,38 @@ const INITIAL_INVITATIONS: FamilyInvitation[] = [
 ]
 
 export default function InvitationsPage() {
-  const [invitations, setInvitations] = useState<FamilyInvitation[]>(getInvitations)
+  const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
+  const [invitations, setInvitations] = useState<FamilyInvitation[]>(() => getInvitations(getActiveWeddingId()))
+  const [isSaving, setIsSaving] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [circleFilter, setCircleFilter] = useState<string>('all')
   const [statusFilter, setStatusFilter] = useState<string>('all')
 
   useEffect(() => {
+    const wid = getActiveWeddingId()
+    setWeddingId(wid)
+    setInvitations(getInvitations(wid))
+
+    let isMounted = true
+    syncInvitationsFromBackend(wid).then((synced) => {
+      if (isMounted) setInvitations(synced)
+    })
+
     const handleUpdate = () => {
-      setInvitations(getInvitations())
+      const currentWid = getActiveWeddingId()
+      setWeddingId(currentWid)
+      setInvitations(getInvitations(currentWid))
+      syncInvitationsFromBackend(currentWid).then((synced) => {
+        if (isMounted) setInvitations(synced)
+      })
     }
     window.addEventListener('weddingos_invitations_updated', handleUpdate)
-    return () => window.removeEventListener('weddingos_invitations_updated', handleUpdate)
+    window.addEventListener('weddingos_active_wedding_changed', handleUpdate)
+    return () => {
+      isMounted = false
+      window.removeEventListener('weddingos_invitations_updated', handleUpdate)
+      window.removeEventListener('weddingos_active_wedding_changed', handleUpdate)
+    }
   }, [])
 
   // Modals
@@ -179,33 +201,85 @@ export default function InvitationsPage() {
     setIsFormModalOpen(true)
   }
 
-  const handleDelete = (id: string, name: string) => {
+  const handleDelete = async (id: string, name: string) => {
     if (confirm(`Remove "${name}" from your royal invitation register?`)) {
+      const wid = weddingId || getActiveWeddingId()
+      const numId = Number(id.replace('inv-', ''))
+      if (!isNaN(numId)) {
+        try {
+          await invitationsApi.delete(numId)
+        } catch (err) {
+          console.warn('Backend delete failed, removing locally:', err)
+        }
+      }
       const next = invitations.filter((i) => i.id !== id)
       setInvitations(next)
-      saveInvitations(next)
+      saveInvitations(next, wid)
     }
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    let next: FamilyInvitation[]
-    if (editingInv) {
-      next = invitations.map((i) =>
-        i.id === editingInv.id ? { ...i, ...formData } : i
-      )
-    } else {
-      const token = `wos-${formData.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
-      const newInv: FamilyInvitation = {
-        id: `inv-${Date.now()}`,
-        invitationToken: token,
-        ...formData,
+    setIsSaving(true)
+    const wid = weddingId || getActiveWeddingId()
+
+    try {
+      if (editingInv) {
+        const numId = Number(editingInv.id.replace('inv-', ''))
+        if (!isNaN(numId)) {
+          await invitationsApi.update(numId, {
+            displayName: formData.displayName,
+            primaryContactName: formData.primaryContactName,
+            phoneNumber: formData.phoneNumber,
+            email: formData.email,
+            circle: formData.circle,
+            maxAttendees: formData.maxAttendees,
+            actualAttendees: formData.actualAttendees,
+            rsvpStatus: formData.rsvpStatus,
+            dietaryNotes: formData.dietaryNotes,
+          })
+        }
+      } else {
+        await invitationsApi.create(
+          {
+            displayName: formData.displayName,
+            primaryContactName: formData.primaryContactName,
+            phoneNumber: formData.phoneNumber,
+            email: formData.email,
+            circle: formData.circle,
+            maxAttendees: formData.maxAttendees,
+            actualAttendees: formData.actualAttendees,
+            rsvpStatus: formData.rsvpStatus,
+            dietaryNotes: formData.dietaryNotes,
+          },
+          wid
+        )
       }
-      next = [...invitations, newInv]
+      const fresh = await syncInvitationsFromBackend(wid)
+      setInvitations(fresh)
+      setIsFormModalOpen(false)
+    } catch (err) {
+      console.warn('Backend save failed, saving locally:', err)
+      let next: FamilyInvitation[]
+      if (editingInv) {
+        next = invitations.map((i) =>
+          i.id === editingInv.id ? { ...i, ...formData } : i
+        )
+      } else {
+        const token = `wos-${formData.displayName.toLowerCase().replace(/[^a-z0-9]/g, '')}-${Math.floor(1000 + Math.random() * 9000)}`
+        const newInv: FamilyInvitation = {
+          id: `inv-${Date.now()}`,
+          invitationToken: token,
+          ...formData,
+        }
+        next = [...invitations, newInv]
+      }
+      setInvitations(next)
+      saveInvitations(next, wid)
+      setIsFormModalOpen(false)
+    } finally {
+      setIsSaving(false)
     }
-    setInvitations(next)
-    saveInvitations(next)
-    setIsFormModalOpen(false)
   }
 
   const handleCopyLink = (token: string) => {

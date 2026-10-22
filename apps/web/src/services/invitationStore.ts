@@ -1,24 +1,17 @@
 import type { FamilyInvitation, CheckInLogEntry } from '../types/invitation'
-import { invitationsApi, checkInApi, type BackendInvitation } from './apiClient'
+import { invitationsApi, checkInApi, getActiveWeddingId, type BackendInvitation } from './apiClient'
 
 const STORAGE_KEY = 'weddingos_family_invitations'
 const LOGS_STORAGE_KEY = 'weddingos_checkin_logs'
-
-function getActiveWeddingId(): number {
-  // 0 = no active wedding (never fall back to wedding 1)
-  try {
-    const raw = localStorage.getItem('weddingos_active_wedding')
-    if (raw) return Number(JSON.parse(raw).id) || 0
-  } catch {}
-  return 0
-}
 
 function getStorageKey(wid: number): string {
   return `weddingos_${wid}_family_invitations`
 }
 
 export async function syncInvitationsFromBackend(weddingId?: number): Promise<FamilyInvitation[]> {
-  const wid = weddingId ?? getActiveWeddingId()
+  const wid = weddingId || getActiveWeddingId()
+  if (!wid) return getInvitations(wid)
+
   try {
     const res = await invitationsApi.getAll(wid)
     if (res && res.invitations && res.invitations.length > 0) {
@@ -41,16 +34,60 @@ export async function syncInvitationsFromBackend(weddingId?: number): Promise<Fa
       }))
       saveInvitations(mapped, wid)
       return mapped
+    } else {
+      // If backend has no records yet, check if this browser has local invitations (e.g. created on desktop)
+      // and automatically upload them to the backend database
+      const local = getInvitations(wid)
+      if (local && local.length > 0) {
+        for (const item of local) {
+          try {
+            await invitationsApi.create(
+              {
+                displayName: item.displayName,
+                primaryContactName: item.primaryContactName,
+                phoneNumber: item.phoneNumber,
+                email: item.email,
+                circle: item.circle,
+                maxAttendees: item.maxAttendees,
+                actualAttendees: item.actualAttendees,
+                rsvpStatus: item.rsvpStatus,
+                dietaryNotes: item.dietaryNotes,
+                organizerNotes: item.organizerNotes,
+              },
+              wid
+            )
+          } catch (e) {
+            console.warn('Could not auto-migrate local invitation to database:', e)
+          }
+        }
+        const refreshed = await invitationsApi.getAll(wid)
+        if (refreshed?.invitations?.length) {
+          const remapped: FamilyInvitation[] = refreshed.invitations.map((inv: BackendInvitation) => ({
+            id: `inv-${inv.id}`,
+            displayName: inv.displayName,
+            primaryContactName: inv.primaryContactName,
+            phoneNumber: inv.phoneNumber,
+            email: inv.email || '',
+            circle: inv.circle as any,
+            maxAttendees: inv.maxAttendees,
+            actualAttendees: inv.actualAttendees,
+            rsvpStatus: inv.rsvpStatus,
+            ceremoniesAllowed: ['Haldi', 'Mehendi', 'Sangeet', 'Pheras', 'Reception'],
+            dietaryNotes: inv.dietaryNotes || '',
+            invitationToken: inv.invitationToken,
+            checkedInAt: inv.checkedInAt || null,
+            checkedInBy: inv.checkedInBy || null,
+            organizerNotes: inv.organizerNotes || '',
+          }))
+          saveInvitations(remapped, wid)
+          return remapped
+        }
+      }
     }
   } catch (err) {
     console.warn('Backend invitations sync offline or pending:', err)
   }
   return getInvitations(wid)
-}
-
-// Initial sync trigger in browser environment
-if (typeof window !== 'undefined') {
-  syncInvitationsFromBackend().catch(() => {})
 }
 
 export const DEFAULT_INVITATIONS: FamilyInvitation[] = []
