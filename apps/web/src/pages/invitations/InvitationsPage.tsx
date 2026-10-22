@@ -129,20 +129,22 @@ export default function InvitationsPage() {
       if (isMounted) setInvitations(synced)
     })
 
-    const handleUpdate = () => {
+    const handleActiveChanged = () => {
       const currentWid = getActiveWeddingId()
-      setWeddingId(currentWid)
-      setInvitations(getInvitations(currentWid))
-      syncInvitationsFromBackend(currentWid).then((synced) => {
-        if (isMounted) setInvitations(synced)
+      setWeddingId((prev) => {
+        if (prev !== currentWid) {
+          syncInvitationsFromBackend(currentWid).then((synced) => {
+            if (isMounted) setInvitations(synced)
+          })
+          return currentWid
+        }
+        return prev
       })
     }
-    window.addEventListener('weddingos_invitations_updated', handleUpdate)
-    window.addEventListener('weddingos_active_wedding_changed', handleUpdate)
+    window.addEventListener('weddingos_active_wedding_changed', handleActiveChanged)
     return () => {
       isMounted = false
-      window.removeEventListener('weddingos_invitations_updated', handleUpdate)
-      window.removeEventListener('weddingos_active_wedding_changed', handleUpdate)
+      window.removeEventListener('weddingos_active_wedding_changed', handleActiveChanged)
     }
   }, [])
 
@@ -204,17 +206,18 @@ export default function InvitationsPage() {
   const handleDelete = async (id: string, name: string) => {
     if (confirm(`Remove "${name}" from your royal invitation register?`)) {
       const wid = weddingId || getActiveWeddingId()
+      const next = invitations.filter((i) => i.id !== id)
+      setInvitations(next)
+      saveInvitations(next, wid)
+
       const numId = Number(id.replace('inv-', ''))
       if (!isNaN(numId)) {
         try {
           await invitationsApi.delete(numId)
         } catch (err) {
-          console.warn('Backend delete failed, removing locally:', err)
+          console.warn('Backend delete failed, keeping local removal:', err)
         }
       }
-      const next = invitations.filter((i) => i.id !== id)
-      setInvitations(next)
-      saveInvitations(next, wid)
     }
   }
 
