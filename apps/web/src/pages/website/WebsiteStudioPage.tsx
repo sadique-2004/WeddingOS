@@ -26,10 +26,48 @@ import {
   Heart,
   ArrowRight,
   Info,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
 } from 'lucide-react'
 import PublicWeddingPage from '../public/PublicWeddingPage'
 import type { PublicWebsiteConfig } from '../../types/website'
 import { workspacesApi, websiteApi, getActiveWeddingId } from '../../services/apiClient'
+
+export function generateUniqueSlug(brideName?: string, groomName?: string): string {
+  const clean = (s?: string) =>
+    (s || '')
+      .toLowerCase()
+      .trim()
+      .replace(/[^a-z0-9]/g, '')
+
+  const b = clean(brideName)
+  const g = clean(groomName)
+  const randNum = Math.floor(100 + Math.random() * 900)
+  const year = new Date().getFullYear()
+
+  if (b && g) {
+    const templates = [
+      `${b}-${g}-${randNum}`,
+      `${b}-weds-${g}-${randNum}`,
+      `${b}-${g}-${year}`,
+      `${b}-and-${g}-${randNum}`,
+    ]
+    return templates[Math.floor(Math.random() * templates.length)]
+  } else if (b || g) {
+    const name = b || g
+    const templates = [
+      `${name}-wedding-${randNum}`,
+      `${name}-celebration-${randNum}`,
+      `${name}-and-forever-${randNum}`,
+    ]
+    return templates[Math.floor(Math.random() * templates.length)]
+  } else {
+    const prefixes = ['royal-wedding', 'sacred-vows', 'celebration', 'eternal-union', 'mewar-wedding']
+    const p = prefixes[Math.floor(Math.random() * prefixes.length)]
+    return `${p}-${randNum}`
+  }
+}
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
   slug: 'my-wedding',
@@ -41,7 +79,7 @@ const DEFAULT_CONFIG: PublicWebsiteConfig = {
   welcomeHeadline: 'Welcome to Our Wedding Celebration',
   welcomeMessage:
     'With the blessings of our elders and loved ones, we joyfully invite you to celebrate our union.',
-  isPublished: false,
+  isPublished: true,
   showSchedule: true,
   showDressCode: true,
   showVenues: true,
@@ -86,6 +124,69 @@ export default function WebsiteStudioPage() {
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop')
   const [copied, setCopied] = useState(false)
   const [toastMessage, setToastMessage] = useState<string | null>(null)
+  const [slugStatus, setSlugStatus] = useState<'idle' | 'checking' | 'available' | 'taken' | 'invalid'>('idle')
+  const [slugMessage, setSlugMessage] = useState<string>('')
+  const [isSaving, setIsSaving] = useState(false)
+  const [isGeneratingSlug, setIsGeneratingSlug] = useState(false)
+
+  // Real-time debounced availability check on slug
+  useEffect(() => {
+    const raw = config.slug || ''
+    const cleanSlug = raw.trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
+
+    if (!cleanSlug || cleanSlug.length < 3) {
+      setSlugStatus('invalid')
+      setSlugMessage('Slug must be at least 3 characters (letters, numbers, hyphens).')
+      return
+    }
+
+    setSlugStatus('checking')
+    setSlugMessage('Verifying slug availability in cloud database...')
+
+    const timer = setTimeout(async () => {
+      try {
+        const wid = getActiveWeddingId()
+        const res = await websiteApi.checkSlugAvailable(cleanSlug, wid)
+        if (res.available) {
+          setSlugStatus('available')
+          setSlugMessage(res.isCurrent ? 'Current active wedding handle' : 'Available to claim!')
+        } else {
+          setSlugStatus('taken')
+          setSlugMessage(res.reason || 'This handle is already taken by another wedding.')
+        }
+      } catch {
+        setSlugStatus('available')
+        setSlugMessage('Handle format is valid')
+      }
+    }, 350)
+
+    return () => clearTimeout(timer)
+  }, [config.slug])
+
+  const handleGenerateSlug = async () => {
+    setIsGeneratingSlug(true)
+    const wid = getActiveWeddingId()
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      const candidate = generateUniqueSlug(config.brideName, config.groomName)
+      try {
+        const res = await websiteApi.checkSlugAvailable(candidate, wid)
+        if (res.available) {
+          setConfig(prev => ({ ...prev, slug: candidate }))
+          showToast(`Generated unique slug: /w/${candidate}`)
+          setIsGeneratingSlug(false)
+          return
+        }
+      } catch {
+        setConfig(prev => ({ ...prev, slug: candidate }))
+        setIsGeneratingSlug(false)
+        return
+      }
+    }
+    const fallback = generateUniqueSlug(config.brideName, config.groomName) + '-' + Math.floor(100 + Math.random() * 900)
+    setConfig(prev => ({ ...prev, slug: fallback }))
+    setIsGeneratingSlug(false)
+  }
 
   // Fetch real database details on mount and synchronize with user wedding profile
   useEffect(() => {
@@ -195,39 +296,92 @@ export default function WebsiteStudioPage() {
 
   const handleSave = async () => {
     const wid = getActiveWeddingId()
+    const cleanSlug = (config.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '')
 
-    // 1. Optimistic immediate save to localStorage & toast (0ms delay)
-    try {
-      localStorage.setItem('weddingos_website_config', JSON.stringify(config))
-      window.dispatchEvent(new Event('weddingos_website_updated'))
-      showToast('Theme studio settings successfully saved & published to cloud!')
-    } catch {
-      showToast('Error saving settings locally')
+    if (!cleanSlug || cleanSlug.length < 3) {
+      showToast('Please enter a valid website handle (at least 3 characters).')
+      setSlugStatus('invalid')
+      return
     }
 
-    // 2. Parallel background sync to backend
-    // Preserves profile couple details and only updates slug & website customizations
-    Promise.allSettled([
-      workspacesApi.updateDetails({
-        slug: config.slug.trim(),
+    if (slugStatus === 'taken') {
+      showToast('Cannot save: This website address is already taken by another wedding.')
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      // 1. Verify slug availability against database
+      const avail = await websiteApi.checkSlugAvailable(cleanSlug, wid)
+      if (!avail.available && !avail.isCurrent) {
+        setSlugStatus('taken')
+        setSlugMessage('That website address is already taken by another wedding.')
+        showToast('That website address is already taken. Please choose another slug.')
+        setIsSaving(false)
+        return
+      }
+
+      // 2. Update workspace wedding details & slug
+      await workspacesApi.updateDetails({
+        slug: cleanSlug,
         brideName: config.brideName || undefined,
         groomName: config.groomName || undefined,
         weddingDate: config.weddingDate || undefined,
         venueName: config.locationName || undefined,
         city: config.locationName || undefined,
-      }, wid),
-      websiteApi.updateConfig({
+      }, wid)
+
+      // 3. Update website configuration & publication status
+      await websiteApi.updateConfig({
         themeKey: config.themeKey as any,
         welcomeHeadline: config.welcomeHeadline,
         welcomeMessage: config.welcomeMessage,
-        isPublished: config.isPublished,
+        isPublished: config.isPublished !== undefined ? config.isPublished : true,
         showSchedule: config.showSchedule,
         showDressCode: config.showDressCode,
         showVenues: config.showVenues,
         showLivestream: config.showLivestream,
         livestreamUrl: config.livestreamUrl,
       }, wid)
-    ]).catch(err => console.warn('Background studio sync error:', err))
+
+      // 4. Update local state and cached configs
+      const updatedConfig = { ...config, slug: cleanSlug }
+      setConfig(updatedConfig)
+      localStorage.setItem('weddingos_website_config', JSON.stringify(updatedConfig))
+
+      try {
+        const storedActive = localStorage.getItem('weddingos_active_wedding')
+        if (storedActive) {
+          const parsed = JSON.parse(storedActive)
+          parsed.slug = cleanSlug
+          if (config.brideName) parsed.brideName = config.brideName
+          if (config.groomName) parsed.groomName = config.groomName
+          if (config.weddingDate) parsed.weddingDate = config.weddingDate
+          if (config.locationName) parsed.venueName = config.locationName
+          localStorage.setItem('weddingos_active_wedding', JSON.stringify(parsed))
+        }
+      } catch {}
+
+      window.dispatchEvent(new Event('weddingos_website_updated'))
+      window.dispatchEvent(new Event('weddingos_wedding_updated'))
+      window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+
+      setSlugStatus('available')
+      setSlugMessage('Current active wedding handle')
+      showToast('Wedding website settings & slug successfully saved!')
+    } catch (err: any) {
+      console.error('Error saving website config:', err)
+      const errorMsg = err?.message || String(err)
+      if (errorMsg.includes('409') || errorMsg.includes('already taken')) {
+        setSlugStatus('taken')
+        setSlugMessage('That website address is already taken by another wedding.')
+        showToast('That website address is already taken. Please pick a unique slug.')
+      } else {
+        showToast('Saved locally. Backend sync encountered an issue.')
+      }
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   return (
@@ -295,10 +449,17 @@ export default function WebsiteStudioPage() {
           <button
             type="button"
             onClick={handleSave}
-            className="px-4 py-2 rounded-xl bg-gradient-to-r from-[#4b030e] to-[#6f0617] hover:from-[#3a0208] hover:to-[#540411] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all cursor-pointer"
+            disabled={isSaving || slugStatus === 'taken'}
+            className={`px-4 py-2 rounded-xl bg-gradient-to-r from-[#4b030e] to-[#6f0617] hover:from-[#3a0208] hover:to-[#540411] text-white text-xs font-semibold shadow-xs flex items-center gap-1.5 transition-all ${
+              isSaving || slugStatus === 'taken' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+            }`}
           >
-            <Save className="w-3.5 h-3.5 text-[#e6bd81]" />
-            <span>Save Changes</span>
+            {isSaving ? (
+              <Loader2 className="w-3.5 h-3.5 text-[#e6bd81] animate-spin" />
+            ) : (
+              <Save className="w-3.5 h-3.5 text-[#e6bd81]" />
+            )}
+            <span>{isSaving ? 'Saving to Database...' : 'Save Changes'}</span>
           </button>
         </div>
       </div>
@@ -731,10 +892,33 @@ export default function WebsiteStudioPage() {
                 </p>
               </div>
 
-              {/* Slug Input */}
-              <div className="space-y-1.5">
-                <label className="text-xs font-bold text-[#4b030e]">Portal URL Handle (Slug)</label>
-                <div className="flex items-center rounded-xl border border-neutral-200 overflow-hidden focus-within:border-[#6f0617]">
+              {/* Slug Input & Generator */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-[#4b030e]">Portal URL Handle (Slug)</label>
+                  <button
+                    type="button"
+                    onClick={handleGenerateSlug}
+                    disabled={isGeneratingSlug}
+                    className="text-[11px] font-semibold text-[#85531d] bg-[#fdf5ea] hover:bg-[#faebd5] border border-[#e6bd81]/60 px-2.5 py-1 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    title="Generate a brand new unique slug based on couple names"
+                  >
+                    {isGeneratingSlug ? (
+                      <Loader2 className="w-3 h-3 text-[#b88444] animate-spin" />
+                    ) : (
+                      <Sparkles className="w-3 h-3 text-[#b88444]" />
+                    )}
+                    <span>{isGeneratingSlug ? 'Generating...' : 'Generate Unique Slug'}</span>
+                  </button>
+                </div>
+
+                <div className={`flex items-center rounded-xl border overflow-hidden transition-colors ${
+                  slugStatus === 'taken'
+                    ? 'border-red-400 focus-within:border-red-600 bg-red-50/20'
+                    : slugStatus === 'available'
+                    ? 'border-emerald-300 focus-within:border-emerald-600'
+                    : 'border-neutral-200 focus-within:border-[#6f0617]'
+                }`}>
                   <span className="px-3 py-2 bg-neutral-100 text-neutral-500 text-xs font-mono border-r border-neutral-200 select-none">
                     /w/
                   </span>
@@ -747,13 +931,63 @@ export default function WebsiteStudioPage() {
                         slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-'),
                       })
                     }
-                    className="flex-1 px-3 py-2 text-xs font-mono focus:outline-none"
+                    className="flex-1 px-3 py-2 text-xs font-mono focus:outline-none bg-transparent"
                     placeholder="our-wedding"
                   />
+                  {/* Status Indicator Badge inside input */}
+                  <div className="px-2.5 py-1 flex items-center gap-1 shrink-0">
+                    {slugStatus === 'checking' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                        <Loader2 className="w-3 h-3 animate-spin text-amber-600" />
+                        Checking...
+                      </span>
+                    )}
+                    {slugStatus === 'available' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-200">
+                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                        Available
+                      </span>
+                    )}
+                    {slugStatus === 'taken' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-bold text-red-700 bg-red-50 px-2 py-0.5 rounded-md border border-red-200">
+                        <AlertCircle className="w-3 h-3 text-red-600" />
+                        Already Taken
+                      </span>
+                    )}
+                    {slugStatus === 'invalid' && (
+                      <span className="inline-flex items-center gap-1 text-[10px] font-medium text-neutral-500 bg-neutral-100 px-2 py-0.5 rounded-md border border-neutral-200">
+                        Min 3 chars
+                      </span>
+                    )}
+                  </div>
                 </div>
-                <p className="text-[11px] text-neutral-400">
-                  Full shareable link: <span className="font-mono text-neutral-600 font-semibold">{window.location.origin}/w/{config.slug}</span>
-                </p>
+
+                {/* Slug Status Feedback & Advice */}
+                <div className="text-[11px] flex items-center justify-between gap-2">
+                  {slugStatus === 'taken' ? (
+                    <p className="text-red-600 font-semibold flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      <span>{slugMessage} - Click &ldquo;Generate Unique Slug&rdquo; to pick another!</span>
+                    </p>
+                  ) : slugStatus === 'available' ? (
+                    <p className="text-emerald-700 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3 h-3 shrink-0 text-emerald-600" />
+                      <span>{slugMessage}</span>
+                    </p>
+                  ) : (
+                    <p className="text-neutral-400">
+                      Full shareable link: <span className="font-mono text-neutral-600 font-semibold">{window.location.origin}/w/{config.slug}</span>
+                    </p>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleCopyLink}
+                    className="text-[10px] font-semibold text-[#85531d] hover:text-[#4b030e] underline cursor-pointer shrink-0"
+                  >
+                    Copy Link
+                  </button>
+                </div>
               </div>
 
               {/* Publication Status Switch */}

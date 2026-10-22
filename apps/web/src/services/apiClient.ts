@@ -577,6 +577,15 @@ export const websiteApi = {
     ),
   // Published sites only; unknown or unpublished slugs return 404.
   getPublic: (slug: string) => request<any>(`/public/w/${encodeURIComponent(slug)}`, {}, true),
+  // Real-time slug availability check
+  checkSlugAvailable: (slug: string, weddingId?: number) => {
+    const qs = weddingId ? `?weddingId=${weddingId}` : ''
+    return request<{ available: boolean; reason?: string; isCurrent?: boolean; slug: string }>(
+      `/public/w/${encodeURIComponent(slug)}/available${qs}`,
+      {},
+      true
+    )
+  },
 }
 
 // ---------------- Public guest endpoints (no login) ----------------

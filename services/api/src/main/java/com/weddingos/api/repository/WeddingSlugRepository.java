@@ -10,5 +10,6 @@ import java.util.Optional;
 public interface WeddingSlugRepository extends JpaRepository<WeddingSlug, Long> {
     Optional<WeddingSlug> findBySlugAndIsActiveTrue(String slug);
     Optional<WeddingSlug> findByWeddingId(Long weddingId);
+    Optional<WeddingSlug> findBySlug(String slug);
     boolean existsBySlug(String slug);
 }

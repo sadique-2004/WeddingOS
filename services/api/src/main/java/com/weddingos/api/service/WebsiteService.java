@@ -68,11 +68,33 @@ public class WebsiteService {
                     site.setWedding(wedding);
                     site.setWelcomeHeadline("Celebrating the Sacred Union of " + wedding.getBrideName() + " & " + wedding.getGroomName());
                     site.setWelcomeMessage("With the blessings of our parents, we joyously invite you to share in our laughter, sacred ceremonies, and celebrations.");
+                    site.setIsPublished(true);
                     return websiteRepository.save(site);
                 });
     }
 
     // ---------------- Public (no login): published sites only, read-only ----------------
+
+    @Transactional(readOnly = true)
+    public Map<String, Object> checkSlugAvailability(String rawSlug, Long currentWeddingId) {
+        if (rawSlug == null || rawSlug.isBlank()) {
+            return Map.of("available", false, "reason", "Slug cannot be blank", "slug", "");
+        }
+        String cleanSlug = rawSlug.trim().toLowerCase().replaceAll("[^a-z0-9-]", "-").replaceAll("-+", "-").replaceAll("^-|-$", "");
+        if (cleanSlug.length() < 3) {
+            return Map.of("available", false, "reason", "Slug must be at least 3 characters", "slug", cleanSlug);
+        }
+        var existing = slugRepository.findBySlug(cleanSlug);
+        if (existing.isEmpty()) {
+            return Map.of("available", true, "slug", cleanSlug);
+        }
+        WeddingSlug found = existing.get();
+        boolean isMine = currentWeddingId != null && found.getWedding() != null && currentWeddingId.equals(found.getWedding().getId());
+        if (isMine) {
+            return Map.of("available", true, "isCurrent", true, "slug", cleanSlug);
+        }
+        return Map.of("available", false, "reason", "That website address is already taken by another wedding", "slug", cleanSlug);
+    }
 
     /**
      * Resolves the wedding that owns an active slug and has a published website.

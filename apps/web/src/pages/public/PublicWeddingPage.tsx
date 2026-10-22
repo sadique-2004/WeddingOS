@@ -148,6 +148,21 @@ function formatCeremonyDate(dateStr?: string): string {
   }
 }
 
+function formatFullWeddingDate(dateStr?: string): string {
+  if (!dateStr) return 'Date to be announced'
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    return d.toLocaleDateString('en-US', {
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
 function formatCeremonyTime(start?: string, end?: string): string {
   if (start && end) return `${start} – ${end}`
   if (start) return `${start} onwards`
@@ -208,6 +223,8 @@ export default function PublicWeddingPage({
     return DEFAULT_CONFIG
   })
 
+  const [isLoading, setIsLoading] = useState<boolean>(() => Boolean(slug && !previewConfig))
+  const [notFound, setNotFound] = useState<boolean>(false)
   const [copiedLink, setCopiedLink] = useState(false)
   const [ceremonies, setCeremonies] = useState<DisplayCeremony[]>(() => {
     if (propEvents && propEvents.length > 0) {
@@ -296,41 +313,63 @@ export default function PublicWeddingPage({
     }
 
     async function loadBackendData() {
+      if (!slug) return
+      setIsLoading(true)
       try {
-        if (slug) {
-          const publicData = await websiteApi.getPublic(slug).catch(() => null)
-          if (publicData) {
-            setConfig((prev) => ({
-              ...prev,
-              brideName: publicData.brideName || prev.brideName,
-              groomName: publicData.groomName || prev.groomName,
-              weddingDate: publicData.weddingDate || prev.weddingDate,
-              locationName: publicData.venueName || publicData.city || prev.locationName,
-              themeKey: (publicData.themeKey as any) || prev.themeKey,
-              welcomeHeadline: publicData.welcomeHeadline || prev.welcomeHeadline,
-              welcomeMessage: publicData.welcomeMessage || prev.welcomeMessage,
-              isPublished: publicData.isPublished !== undefined ? publicData.isPublished : prev.isPublished,
-              showSchedule: publicData.showSchedule !== undefined ? publicData.showSchedule : prev.showSchedule,
-              showDressCode: publicData.showDressCode !== undefined ? publicData.showDressCode : prev.showDressCode,
-              showVenues: publicData.showVenues !== undefined ? publicData.showVenues : prev.showVenues,
-              showLivestream: publicData.showLivestream !== undefined ? publicData.showLivestream : prev.showLivestream,
-              livestreamUrl: publicData.livestreamUrl || prev.livestreamUrl,
-              slug: publicData.slug || slug,
-            }))
+        const publicData = await websiteApi.getPublic(slug).catch(() => null)
+        if (publicData) {
+          setConfig((prev) => ({
+            ...prev,
+            brideName: publicData.brideName || prev.brideName,
+            groomName: publicData.groomName || prev.groomName,
+            weddingDate: publicData.weddingDate || prev.weddingDate,
+            locationName: publicData.venueName || publicData.city || prev.locationName,
+            themeKey: (publicData.themeKey as any) || prev.themeKey,
+            welcomeHeadline: publicData.welcomeHeadline || prev.welcomeHeadline,
+            welcomeMessage: publicData.welcomeMessage || prev.welcomeMessage,
+            isPublished: publicData.isPublished !== undefined ? publicData.isPublished : prev.isPublished,
+            showSchedule: publicData.showSchedule !== undefined ? publicData.showSchedule : prev.showSchedule,
+            showDressCode: publicData.showDressCode !== undefined ? publicData.showDressCode : prev.showDressCode,
+            showVenues: publicData.showVenues !== undefined ? publicData.showVenues : prev.showVenues,
+            showLivestream: publicData.showLivestream !== undefined ? publicData.showLivestream : prev.showLivestream,
+            livestreamUrl: publicData.livestreamUrl || prev.livestreamUrl,
+            slug: publicData.slug || slug,
+          }))
 
-            if (publicData.events && Array.isArray(publicData.events) && publicData.events.length > 0) {
-              setCeremonies(publicData.events.map(mapToDisplayCeremony))
-            }
-            return
+          if (publicData.events && Array.isArray(publicData.events) && publicData.events.length > 0) {
+            setCeremonies(publicData.events.map(mapToDisplayCeremony))
+          }
+          setNotFound(false)
+        } else {
+          if (!previewConfig) {
+            setNotFound(true)
           }
         }
       } catch (err) {
         console.warn('Could not load public wedding data from backend:', err)
+        if (!previewConfig) {
+          setNotFound(true)
+        }
+      } finally {
+        setIsLoading(false)
       }
     }
 
     loadBackendData()
   }, [slug, previewConfig])
+
+  // Dynamic document.title reflecting the couple names or wedding title
+  useEffect(() => {
+    if (notFound) {
+      document.title = 'Wedding Portal Not Found | WeddingOS'
+      return
+    }
+    const couple = [config.brideName, config.groomName].filter(Boolean).join(' & ')
+    const pageTitle = couple
+      ? `${couple} | Wedding Celebration`
+      : config.welcomeHeadline || 'Wedding Celebration | WeddingOS'
+    document.title = pageTitle
+  }, [config.brideName, config.groomName, config.welcomeHeadline, notFound])
 
   // Continuous real-time countdown timer that ticks every 1 second
   useEffect(() => {
@@ -394,6 +433,49 @@ export default function PublicWeddingPage({
     navigator.clipboard.writeText(window.location.href)
     setCopiedLink(true)
     setTimeout(() => setCopiedLink(false), 2500)
+  }
+
+  if (isLoading && !previewConfig) {
+    return (
+      <div className="min-h-screen bg-[#faf7f2] flex flex-col items-center justify-center p-6 text-center">
+        <div className="w-14 h-14 rounded-full border-4 border-[#e6bd81]/40 border-t-[#6f0617] animate-spin mb-4" />
+        <h2 className="font-cormorant text-2xl font-bold text-[#4b030e]">Loading Wedding Celebration</h2>
+        <p className="text-xs text-neutral-500 mt-1">Preparing ceremonial details and itinerary...</p>
+      </div>
+    )
+  }
+
+  if (notFound && !previewConfig) {
+    return (
+      <div className="min-h-screen bg-[#faf7f2] flex items-center justify-center p-6 text-center">
+        <div className="max-w-md bg-white p-8 rounded-3xl border border-[#e6bd81]/40 shadow-xl space-y-4">
+          <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto">
+            <ShieldAlert className="w-7 h-7" />
+          </div>
+          <h2 className="font-cormorant text-3xl font-bold text-[#3a0208]">
+            Wedding Portal Not Found
+          </h2>
+          <p className="text-xs text-neutral-500 leading-relaxed">
+            We couldn’t find an active, published wedding celebration for handle <code className="text-[#6f0617] font-bold font-mono">/w/{slug}</code>. Please confirm the link with the hosts or log in to manage your site.
+          </p>
+          <div className="pt-2 flex items-center justify-center gap-3">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#faf4ec] text-[#6f0617] border border-[#e6bd81]/60 text-xs font-semibold"
+            >
+              <span>Back to Home</span>
+            </Link>
+            <Link
+              to="/sign-in"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#6f0617] text-white text-xs font-semibold shadow-xs"
+            >
+              <span>Organizer Sign In</span>
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   if (!config.isPublished && !previewConfig) {
@@ -467,19 +549,25 @@ export default function PublicWeddingPage({
 
             {/* Couple Names Headline - Large & Grand */}
             <h1 className={`${themeStyles.fontHead} text-6xl md:text-7xl lg:text-8xl font-normal leading-tight tracking-tight drop-shadow-xl text-white text-center`}>
-              {config.brideName} &amp; {config.groomName}
+              {config.brideName || config.groomName ? (
+                <>
+                  {config.brideName} {config.brideName && config.groomName && <>&amp;</>} {config.groomName}
+                </>
+              ) : (
+                config.welcomeHeadline || 'Sacred Wedding Celebration'
+              )}
             </h1>
 
             {/* Date & Destination Venue - Single Horizontal Line with Bullet */}
             <div className="flex items-center justify-center gap-3 text-lg text-white/95 font-sans font-medium drop-shadow-md">
               <span className="flex items-center gap-1.5">
                 <Calendar className="w-4 h-4 text-[#e6bd81]" />
-                <span>{new Date(config.weddingDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                <span>{formatFullWeddingDate(config.weddingDate)}</span>
               </span>
               <span className="text-white/60">&bull;</span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="w-4 h-4 text-[#e6bd81]" />
-                <span>{config.locationName}</span>
+                <span>{config.locationName || 'Venue details to follow'}</span>
               </span>
             </div>
 
@@ -603,9 +691,17 @@ export default function PublicWeddingPage({
               {/* Mobile Couple Names - TIGHT SPACING, NO GAP */}
               <div className="text-center py-0.5">
                 <h1 className={`${themeStyles.fontHead} text-3xl font-bold leading-tight tracking-normal text-white text-center`}>
-                  <span>{config.brideName}</span>
-                  <span className="text-[#e6bd81] font-light text-xl mx-1.5">&amp;</span>
-                  <span>{config.groomName}</span>
+                  {config.brideName || config.groomName ? (
+                    <>
+                      <span>{config.brideName}</span>
+                      {config.brideName && config.groomName && (
+                        <span className="text-[#e6bd81] font-light text-xl mx-1.5">&amp;</span>
+                      )}
+                      <span>{config.groomName}</span>
+                    </>
+                  ) : (
+                    <span>{config.welcomeHeadline || 'Wedding Celebration'}</span>
+                  )}
                 </h1>
               </div>
 
@@ -614,12 +710,12 @@ export default function PublicWeddingPage({
                 {/* Line 1: Date */}
                 <div className="flex items-center justify-center gap-1 font-medium">
                   <Calendar className="w-3.5 h-3.5 text-[#e6bd81] shrink-0" />
-                  <span>{new Date(config.weddingDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</span>
+                  <span>{formatFullWeddingDate(config.weddingDate)}</span>
                 </div>
                 {/* Line 2: Venue */}
                 <div className="flex items-center justify-center gap-1 font-medium text-white/80">
                   <MapPin className="w-3.5 h-3.5 text-[#e6bd81] shrink-0" />
-                  <span className="truncate max-w-[260px]">{config.locationName}</span>
+                  <span className="truncate max-w-[260px]">{config.locationName || 'Venue details to follow'}</span>
                 </div>
               </div>
             </div>

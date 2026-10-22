@@ -34,6 +34,15 @@ public class WebsiteController {
         return ResponseEntity.ok(websiteService.updateWebsiteConfig(weddingId, config));
     }
 
+    // Public endpoint to check slug availability
+    @GetMapping("/public/w/{slug}/available")
+    @Operation(summary = "Check if a wedding website slug is available")
+    public ResponseEntity<Map<String, Object>> checkSlugAvailability(
+            @PathVariable String slug,
+            @RequestParam(required = false) Long weddingId) {
+        return ResponseEntity.ok(websiteService.checkSlugAvailability(slug, weddingId));
+    }
+
     // Public guest wedding website by slug (e.g. /w/ananya-kabir)
     @GetMapping("/public/w/{slug}")
     @Operation(summary = "Public endpoint serving guest wedding website by slug")
