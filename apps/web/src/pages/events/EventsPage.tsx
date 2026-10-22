@@ -52,6 +52,7 @@ export default function EventsPage() {
     try {
       const backendEvents = await eventsApi.getAll(wid)
       if (backendEvents && Array.isArray(backendEvents)) {
+        localStorage.setItem(`weddingos_${wid}_events`, JSON.stringify(backendEvents))
         setEvents(
           backendEvents.map((be) => ({
             id: String(be.id),
@@ -71,6 +72,7 @@ export default function EventsPage() {
           }))
         )
       } else {
+        localStorage.setItem(`weddingos_${wid}_events`, JSON.stringify([]))
         setEvents([])
       }
     } catch (err) {
@@ -187,7 +189,9 @@ export default function EventsPage() {
       if (!isNaN(numId)) {
         try {
           await eventsApi.delete(numId)
-          await loadEvents(weddingId || getActiveWeddingId())
+          const wid = weddingId || getActiveWeddingId()
+          await loadEvents(wid)
+          window.dispatchEvent(new Event('weddingos_events_updated'))
         } catch (err) {
           console.error('Backend delete failed:', err)
           alert('Could not delete ceremony from database. Please check your connection.')
@@ -230,6 +234,7 @@ export default function EventsPage() {
       }
       // Re-fetch clean list directly from the database
       await loadEvents(currentWid)
+      window.dispatchEvent(new Event('weddingos_events_updated'))
       setIsModalOpen(false)
     } catch (err: any) {
       console.error('Failed saving event to database:', err)

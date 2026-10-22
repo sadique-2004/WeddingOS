@@ -16,7 +16,7 @@ import {
   ChevronDown,
 } from 'lucide-react'
 import type { PublicWebsiteConfig } from '../../types/website'
-import { websiteApi } from '../../services/apiClient'
+import { websiteApi, eventsApi, getActiveWeddingId } from '../../services/apiClient'
 export type { PublicWebsiteConfig } from '../../types/website'
 
 const DEFAULT_CONFIG: PublicWebsiteConfig = {
@@ -38,13 +38,28 @@ const DEFAULT_CONFIG: PublicWebsiteConfig = {
   coverPhoto: '/events/pheras.jpg',
 }
 
-const CEREMONIES = [
+export interface DisplayCeremony {
+  id?: string
+  name: string
+  dayLabel: string
+  time: string
+  date: string
+  venue: string
+  address?: string
+  mapUrl?: string
+  dressCode: string
+  image: string
+  description: string
+}
+
+const FALLBACK_CEREMONIES: DisplayCeremony[] = [
   {
     name: 'Haldi & Phoolon Ki Holi',
     dayLabel: 'Day 1 • Morning',
     time: '10:30 AM – 01:30 PM',
     date: 'Feb 16, 2027',
     venue: 'The Courtyard Mandap, Udaivilas',
+    address: 'Udaipur, Rajasthan',
     dressCode: 'Shades of Marigold Yellow & Mustard Bandhani',
     image: '/events/haldi.jpg',
     description: 'Turmeric paste blessings, sweet lassi, and lively Mangal Geet with fresh petal showers.',
@@ -55,6 +70,7 @@ const CEREMONIES = [
     time: '04:00 PM – 08:00 PM',
     date: 'Feb 16, 2027',
     venue: 'Poolside Promenade & Royal Verandah',
+    address: 'Udaipur, Rajasthan',
     dressCode: 'Boho Pastel Florals & Mint Greens',
     image: '/events/mehendi.jpg',
     description: 'Intricate bridal henna sessions, artisanal chaat counters, and lakeside acoustic folk tunes.',
@@ -65,6 +81,7 @@ const CEREMONIES = [
     time: '07:30 PM onwards',
     date: 'Feb 17, 2027',
     venue: 'The Royal Crescent Ballroom',
+    address: 'Udaipur, Rajasthan',
     dressCode: 'Indo-Western Glitz, Sequin Sarees & Bandhgalas',
     image: '/events/sangeet.jpg',
     description: 'Choreographed Bollywood family performances, awards ceremony, live Sufi band, and late-night DJ sets.',
@@ -75,6 +92,7 @@ const CEREMONIES = [
     time: '04:30 PM – 08:30 PM',
     date: 'Feb 18, 2027',
     venue: 'Lakeside Lotus Pavilion & Floral Mandap',
+    address: 'Udaipur, Rajasthan',
     dressCode: 'Traditional Royal Silks, Banarasi Lehengas & Sherwanis',
     image: '/events/pheras.jpg',
     description: 'Royal vintage car arrival, sacred Sanskrit mantras, seven holy vows, and evening Sindoor rituals.',
@@ -85,11 +103,73 @@ const CEREMONIES = [
     time: '09:00 PM onwards',
     date: 'Feb 18, 2027',
     venue: 'Mewar Banquet Lawns & Mirror Palace',
+    address: 'Udaipur, Rajasthan',
     dressCode: 'Formal Black Tie & Haute Couture Gowns',
     image: '/events/reception.jpg',
     description: 'Royal 7-course sit-down dinner feast, champagne toast, live orchestra symphony, and midnight lake fireworks.',
   },
 ]
+
+function getCeremonyImage(evt: any): string {
+  if (evt.imageUrl) return evt.imageUrl
+  if (evt.coverImageUrl) return evt.coverImageUrl
+  const type = (evt.eventType || '').toLowerCase()
+  const name = (evt.name || '').toLowerCase()
+  if (type.includes('haldi') || name.includes('haldi')) return '/events/haldi.jpg'
+  if (type.includes('mehendi') || name.includes('mehendi') || name.includes('mehndi')) return '/events/mehendi.jpg'
+  if (type.includes('sangeet') || name.includes('sangeet') || name.includes('cocktail')) return '/events/sangeet.jpg'
+  if (
+    type.includes('phera') ||
+    type.includes('vivah') ||
+    type.includes('baraat') ||
+    name.includes('phera') ||
+    name.includes('vivah') ||
+    name.includes('baraat') ||
+    name.includes('wedding')
+  ) {
+    return '/events/pheras.jpg'
+  }
+  if (type.includes('reception') || name.includes('reception') || name.includes('dinner')) return '/events/reception.jpg'
+  return '/events/haldi.jpg'
+}
+
+function formatCeremonyDate(dateStr?: string): string {
+  if (!dateStr) return ''
+  try {
+    const d = new Date(dateStr)
+    if (isNaN(d.getTime())) return dateStr
+    return d.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    })
+  } catch {
+    return dateStr
+  }
+}
+
+function formatCeremonyTime(start?: string, end?: string): string {
+  if (start && end) return `${start} – ${end}`
+  if (start) return `${start} onwards`
+  if (end) return `Until ${end}`
+  return 'Time to be announced'
+}
+
+export function mapToDisplayCeremony(be: any): DisplayCeremony {
+  return {
+    id: be.id ? String(be.id) : undefined,
+    name: be.name || 'Sacred Ceremony',
+    dayLabel: be.dayLabel || 'Day 1',
+    time: be.time || formatCeremonyTime(be.startTime, be.endTime),
+    date: be.date || formatCeremonyDate(be.eventDate),
+    venue: be.venueName || be.venue || be.address || 'Venue to be announced',
+    address: be.address || '',
+    mapUrl: be.mapUrl || '',
+    dressCode: be.dressCode || 'Traditional Festive / Formal',
+    image: getCeremonyImage(be),
+    description: be.description || 'Please join us for this sacred ceremony and memorable celebration.',
+  }
+}
 
 // Real-time calculation helper
 function calculateTimeLeft(dateString: string) {
@@ -110,9 +190,11 @@ function calculateTimeLeft(dateString: string) {
 export default function PublicWeddingPage({
   previewConfig,
   isMobileView,
+  events: propEvents,
 }: {
   previewConfig?: PublicWebsiteConfig
   isMobileView?: boolean
+  events?: any[]
 }) {
   const { slug } = useParams()
   const [config, setConfig] = useState<PublicWebsiteConfig>(() => {
@@ -127,6 +209,24 @@ export default function PublicWeddingPage({
   })
 
   const [copiedLink, setCopiedLink] = useState(false)
+  const [ceremonies, setCeremonies] = useState<DisplayCeremony[]>(() => {
+    if (propEvents && propEvents.length > 0) {
+      return propEvents.map(mapToDisplayCeremony)
+    }
+    try {
+      const wid = getActiveWeddingId()
+      if (wid) {
+        const cached = localStorage.getItem(`weddingos_${wid}_events`)
+        if (cached) {
+          const parsed = JSON.parse(cached)
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            return parsed.map(mapToDisplayCeremony)
+          }
+        }
+      }
+    } catch {}
+    return FALLBACK_CEREMONIES
+  })
 
   // Responsive window width detector for real devices
   const [isWindowMobile, setIsWindowMobile] = useState(() => {
@@ -147,6 +247,47 @@ export default function PublicWeddingPage({
 
   // Real-time dynamic countdown state (Seconds live ticking)
   const [countdown, setCountdown] = useState(() => calculateTimeLeft(config.weddingDate))
+
+  // Synchronize events when propEvents changes
+  useEffect(() => {
+    if (propEvents && propEvents.length > 0) {
+      setCeremonies(propEvents.map(mapToDisplayCeremony))
+    }
+  }, [propEvents])
+
+  // Live real-time events synchronization for Studio preview & workspace
+  useEffect(() => {
+    const fetchStudioEvents = async () => {
+      const wid = getActiveWeddingId()
+      if (!wid) return
+      try {
+        const backendEvents = await eventsApi.getAll(wid)
+        if (Array.isArray(backendEvents) && backendEvents.length > 0) {
+          setCeremonies(backendEvents.map(mapToDisplayCeremony))
+          localStorage.setItem(`weddingos_${wid}_events`, JSON.stringify(backendEvents))
+        }
+      } catch (err) {
+        console.warn('Could not fetch events for website preview:', err)
+      }
+    }
+
+    if (previewConfig || !slug) {
+      fetchStudioEvents()
+    }
+
+    const handleEventsSync = () => {
+      fetchStudioEvents()
+    }
+
+    window.addEventListener('weddingos_events_updated', handleEventsSync)
+    window.addEventListener('weddingos_active_wedding_changed', handleEventsSync)
+    window.addEventListener('weddingos_wedding_updated', handleEventsSync)
+    return () => {
+      window.removeEventListener('weddingos_events_updated', handleEventsSync)
+      window.removeEventListener('weddingos_active_wedding_changed', handleEventsSync)
+      window.removeEventListener('weddingos_wedding_updated', handleEventsSync)
+    }
+  }, [previewConfig, slug])
 
   useEffect(() => {
     if (previewConfig) {
@@ -176,11 +317,13 @@ export default function PublicWeddingPage({
               livestreamUrl: publicData.livestreamUrl || prev.livestreamUrl,
               slug: publicData.slug || slug,
             }))
+
+            if (publicData.events && Array.isArray(publicData.events) && publicData.events.length > 0) {
+              setCeremonies(publicData.events.map(mapToDisplayCeremony))
+            }
             return
           }
         }
-
-        // Unknown or missing slug: do not fall back to another wedding's data (previously wedding 1).
       } catch (err) {
         console.warn('Could not load public wedding data from backend:', err)
       }
@@ -660,9 +803,9 @@ export default function PublicWeddingPage({
           </div>
 
           <div className="space-y-6 sm:space-y-8">
-            {CEREMONIES.map((event, index) => (
+            {ceremonies.map((event, index) => (
               <div
-                key={event.name}
+                key={event.id || event.name || index}
                 className={`rounded-3xl overflow-hidden border shadow-sm transition-all duration-300 hover:shadow-xl group ${themeStyles.cardBg}`}
                 style={{
                   borderColor: isDarkTheme ? 'rgba(251, 191, 36, 0.3)' : 'rgba(230, 189, 129, 0.5)',
@@ -724,7 +867,7 @@ export default function PublicWeddingPage({
                               <span className="font-medium truncate text-[11px]">{event.venue}</span>
                             </div>
                             <a
-                              href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
+                              href={event.mapUrl || `https://maps.google.com/?q=${encodeURIComponent(event.venue || event.address || 'Udaipur')}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
@@ -804,7 +947,7 @@ export default function PublicWeddingPage({
                               <span className="font-semibold truncate">{event.venue}</span>
                             </div>
                             <a
-                              href="https://maps.google.com/?q=The+Oberoi+Udaivilas+Udaipur"
+                              href={event.mapUrl || `https://maps.google.com/?q=${encodeURIComponent(event.venue || event.address || 'Udaipur')}`}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="text-[11px] font-bold text-[#6f0617] hover:underline shrink-0 flex items-center gap-1"
