@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useEffect } from 'react'
-import { expensesApi, workspacesApi, getActiveWeddingId } from '../../services/apiClient'
+import { expensesApi, workspacesApi, vendorsApi, getActiveWeddingId } from '../../services/apiClient'
 import {
   DollarSign,
   TrendingUp,
@@ -64,6 +64,33 @@ const CATEGORY_COLORS: Record<ExpenseCategory, { bg: string; text: string; borde
 
 const INITIAL_EXPENSES: Expense[] = []
 
+interface ExpenseExtraMeta {
+  vendorName?: string
+  relatedCeremony?: string
+}
+
+function packExpenseNotes(notes: string, meta: ExpenseExtraMeta): string {
+  const cleanNotes = notes.replace(/\s*\[Meta:.*?\]\s*/g, '').trim()
+  const hasMeta = meta.vendorName || meta.relatedCeremony
+  if (!hasMeta) return cleanNotes
+  const metaObj: Record<string, string> = {}
+  if (meta.vendorName) metaObj.vendorName = meta.vendorName
+  if (meta.relatedCeremony) metaObj.relatedCeremony = meta.relatedCeremony
+  return cleanNotes ? `${cleanNotes}\n[Meta: ${JSON.stringify(metaObj)}]` : `[Meta: ${JSON.stringify(metaObj)}]`
+}
+
+function unpackExpenseNotes(rawNotes?: string): { cleanNotes: string; meta: ExpenseExtraMeta } {
+  if (!rawNotes) return { cleanNotes: '', meta: {} }
+  const match = rawNotes.match(/\[Meta:\s*(\{.*?\})\]/)
+  if (!match) return { cleanNotes: rawNotes.trim(), meta: {} }
+  try {
+    const meta = JSON.parse(match[1]) as ExpenseExtraMeta
+    const cleanNotes = rawNotes.replace(/\[Meta:\s*\{.*?\}\]/, '').trim()
+    return { cleanNotes, meta }
+  } catch {
+    return { cleanNotes: rawNotes.trim(), meta: {} }
+  }
+}
 
 export default function ExpensesPage() {
   const [weddingId, setWeddingId] = useState<number>(getActiveWeddingId())
@@ -93,6 +120,7 @@ export default function ExpensesPage() {
   })
 
   const [expenses, setExpenses] = useState<Expense[]>([])
+  const [vendorSuggestions, setVendorSuggestions] = useState<string[]>([])
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
 
@@ -117,24 +145,46 @@ export default function ExpensesPage() {
       // ignore
     }
 
-    // 2. Load expense ledger items
+    // 2. Load vendor directory to provide instant vendor autocomplete
+    try {
+      const vList = await vendorsApi.getAll(wid)
+      if (Array.isArray(vList) && vList.length > 0) {
+        const names = vList.map((v) => v.businessName).filter(Boolean)
+        setVendorSuggestions(Array.from(new Set(names)))
+      }
+    } catch {
+      try {
+        const cachedVendors = localStorage.getItem(`weddingos_${wid}_vendors`)
+        if (cachedVendors) {
+          const parsed = JSON.parse(cachedVendors)
+          if (Array.isArray(parsed)) {
+            setVendorSuggestions(parsed.map((v: any) => v.name || v.businessName).filter(Boolean))
+          }
+        }
+      } catch {}
+    }
+
+    // 3. Load expense ledger items
     const storageKey = `weddingos_${wid}_expenses`
     try {
       const res: any = await expensesApi.getAll(wid)
       if (res && res.expenses && Array.isArray(res.expenses)) {
-        const mapped: Expense[] = res.expenses.map((be: any) => ({
-          id: String(be.id),
-          title: be.title,
-          amount: Number(be.amount ?? be.actualAmount ?? be.plannedAmount ?? 0),
-          currencyCode: be.currencyCode || 'INR',
-          expenseDate: be.expenseDate || be.paymentDate || new Date().toISOString().split('T')[0],
-          category: (be.category as ExpenseCategory) || 'Other',
-          relatedCeremony: 'All Ceremonies',
-          vendorName: be.vendorName || '',
-          paymentStatus: (be.paymentStatus as any) || (be.status as any) || 'PAID',
-          paymentMethod: be.paymentMethod || 'NEFT / RTGS',
-          notes: be.notes || '',
-        }))
+        const mapped: Expense[] = res.expenses.map((be: any) => {
+          const { cleanNotes, meta } = unpackExpenseNotes(be.notes)
+          return {
+            id: String(be.id),
+            title: be.title,
+            amount: Number(be.amount ?? be.actualAmount ?? be.plannedAmount ?? 0),
+            currencyCode: be.currencyCode || 'INR',
+            expenseDate: be.expenseDate || be.paymentDate || new Date().toISOString().split('T')[0],
+            category: (be.category as ExpenseCategory) || 'Other',
+            relatedCeremony: meta.relatedCeremony || be.relatedCeremony || 'All Ceremonies',
+            vendorName: meta.vendorName || be.vendorName || '',
+            paymentStatus: (be.paymentStatus as any) || (be.status as any) || 'PAID',
+            paymentMethod: be.paymentMethod || 'NEFT / RTGS',
+            notes: cleanNotes || '',
+          }
+        })
         setExpenses(mapped)
         localStorage.setItem(storageKey, JSON.stringify(mapped))
         return
@@ -342,15 +392,20 @@ export default function ExpensesPage() {
     setSaveError(null)
     const wid = weddingId || getActiveWeddingId()
 
+    const packedNotes = packExpenseNotes(formData.notes, {
+      vendorName: formData.vendorName.trim(),
+      relatedCeremony: formData.relatedCeremony,
+    })
+
     const payload = {
-      title: formData.title,
+      title: formData.title.trim(),
       category: formData.category,
       amount: Number(formData.amount),
       currencyCode: formData.currencyCode || 'INR',
       expenseDate: formData.expenseDate || new Date().toISOString().split('T')[0],
       paymentStatus: formData.paymentStatus,
       paymentMethod: formData.paymentMethod,
-      notes: formData.notes,
+      notes: packedNotes,
     }
 
     try {
@@ -983,11 +1038,19 @@ export default function ExpensesPage() {
                   </label>
                   <input
                     type="text"
+                    list="expense-vendor-list"
                     value={formData.vendorName}
                     onChange={(e) => setFormData({ ...formData, vendorName: e.target.value })}
-                    placeholder="e.g. Sabyasachi / Oberoi"
+                    placeholder="e.g. Sabyasachi Mukherjee / Oberoi"
                     className="w-full h-10 px-3.5 rounded-lg border border-neutral-300 focus:border-[#6f0617] focus:ring-1 focus:ring-[#6f0617] outline-none text-xs text-neutral-900"
                   />
+                  {vendorSuggestions.length > 0 && (
+                    <datalist id="expense-vendor-list">
+                      {vendorSuggestions.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
 
                 <div className="space-y-1">
