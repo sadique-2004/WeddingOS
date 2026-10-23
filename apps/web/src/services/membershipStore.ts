@@ -157,8 +157,23 @@ export function getMembers(weddingId?: number, currentUser?: CurrentUserSessionI
         isCurrentSessionUser: true,
       }
     } else {
-      // Create their entry: default to ADMIN if no prior membership exists
-      const userRole: WorkspaceRole = activeUser.role || 'ADMIN'
+      // Check if this email has an assigned role
+      let userRole: WorkspaceRole = activeUser.role || 'ADMIN'
+      let userTitle = userRole === 'ADMIN' ? 'Primary Workspace Admin & Owner' : 'Event Co-Organizer'
+      let userPermissions: ModulePermissions = { ...ALL_PERMISSIONS_ENABLED }
+
+      try {
+        const assignmentsKey = 'weddingos_email_workspace_assignments'
+        const existingAssignments = JSON.parse(localStorage.getItem(assignmentsKey) || '{}')
+        if (existingAssignments[userEmail]) {
+          userRole = existingAssignments[userEmail].role || userRole
+          userTitle = existingAssignments[userEmail].title || userTitle
+          if (existingAssignments[userEmail].permissions) {
+            userPermissions = { ...existingAssignments[userEmail].permissions }
+          }
+        }
+      } catch {}
+
       const newAdminRecord: WeddingMembership = {
         id: `mem-${wid}-${activeUser.id || 'primary-admin'}`,
         weddingId: String(wid),
@@ -166,8 +181,8 @@ export function getMembers(weddingId?: number, currentUser?: CurrentUserSessionI
         fullName: activeUser.fullName || activeUser.email.split('@')[0],
         email: activeUser.email,
         role: userRole,
-        title: userRole === 'ADMIN' ? 'Primary Workspace Admin & Owner' : 'Event Co-Organizer',
-        modulePermissions: { ...ALL_PERMISSIONS_ENABLED },
+        title: userTitle,
+        modulePermissions: userPermissions,
         joinedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
         isCurrentSessionUser: true,
@@ -186,6 +201,24 @@ export function getMembers(weddingId?: number, currentUser?: CurrentUserSessionI
 
   saveMembers(list, wid)
   return list
+}
+
+export function getAssignedWorkspaceForEmail(email: string): any | null {
+  if (!email) return null
+  const normalized = email.trim().toLowerCase()
+  try {
+    const assignmentsKey = 'weddingos_email_workspace_assignments'
+    const assignments = JSON.parse(localStorage.getItem(assignmentsKey) || '{}')
+    if (assignments[normalized]) {
+      return assignments[normalized]
+    }
+    const userScopeKey = `weddingos_${normalized.replace(/[^a-z0-9]/g, '_')}_wedding`
+    const scoped = localStorage.getItem(userScopeKey)
+    if (scoped) {
+      return { wedding: JSON.parse(scoped) }
+    }
+  } catch {}
+  return null
 }
 
 export function saveMembers(members: WeddingMembership[], weddingId?: number): void {
@@ -250,13 +283,43 @@ export function assignTeamMember(params: AssignMemberParams): WeddingMembership 
   const updatedMembers = [...members, newMember]
   saveMembers(updatedMembers, wid)
 
-  // 2. Persist to backend database
+  // 2. Cache assignment mapping for this user's email
+  try {
+    const rawActive = localStorage.getItem('weddingos_active_wedding')
+    if (rawActive) {
+      const activeWedding = JSON.parse(rawActive)
+      const assignedPayload = {
+        ...activeWedding,
+        id: wid,
+        role: params.role,
+        userEmail: normalizedEmail,
+      }
+      const userScopeKey = `weddingos_${normalizedEmail.replace(/[^a-z0-9]/g, '_')}_wedding`
+      localStorage.setItem(userScopeKey, JSON.stringify(assignedPayload))
+
+      const assignmentsKey = 'weddingos_email_workspace_assignments'
+      const existingAssignments = JSON.parse(localStorage.getItem(assignmentsKey) || '{}')
+      existingAssignments[normalizedEmail] = {
+        weddingId: wid,
+        wedding: assignedPayload,
+        role: params.role,
+        title: newMember.title,
+        permissions: newMember.modulePermissions,
+        assignedAt: new Date().toISOString(),
+      }
+      localStorage.setItem(assignmentsKey, JSON.stringify(existingAssignments))
+    }
+  } catch (err) {
+    console.error('Failed caching user workspace assignment:', err)
+  }
+
+  // 3. Persist to backend database
   membersApi.invite({
     fullName: newMember.fullName,
     email: newMember.email,
     role: newMember.role,
     title: newMember.title,
-  }).then((created) => {
+  }, wid).then((created) => {
     if (created?.id && params.role === 'ORGANIZER') {
       membersApi.updatePermissions(created.id, {
         canManageEvents: newMember.modulePermissions.events,

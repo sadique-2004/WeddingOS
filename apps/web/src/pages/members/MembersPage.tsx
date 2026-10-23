@@ -92,7 +92,13 @@ export default function MembersPage() {
 
   const currentUserName = activeUser?.fullName || 'Workspace Admin'
 
-  const [wedding, setWedding] = useState({
+  const [wedding, setWedding] = useState<{
+    id?: number | string
+    brideName: string
+    groomName: string
+    weddingDate: string
+    locationName: string
+  }>({
     brideName: '',
     groomName: '',
     weddingDate: '',
@@ -183,12 +189,14 @@ export default function MembersPage() {
   const handleInviteSubmit = (e: FormEvent) => {
     e.preventDefault()
     try {
+      const wid = wedding.id ? Number(wedding.id) : undefined
       const newMember = assignTeamMember({
         fullName: inviteForm.targetName,
         email: inviteForm.targetEmail,
         role: inviteForm.role,
         title: inviteForm.title,
         modulePermissions: inviteForm.role === 'ADMIN' ? ALL_PERMISSIONS_ENABLED : inviteForm.permissions,
+        weddingId: wid,
       })
 
       refreshData()

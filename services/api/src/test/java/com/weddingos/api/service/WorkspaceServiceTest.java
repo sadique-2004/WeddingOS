@@ -164,6 +164,31 @@ class WorkspaceServiceTest {
     }
 
     @Test
+    void invitedMemberGetsAssignedWeddingEvenIfTheyHaveAnEmptyAutoProvisionedWedding() {
+        Wedding emptyOwned = wedding(99L, me);
+        Wedding invitedWedding = wedding(1L, user(50L));
+        invitedWedding.setBrideName("Ananya");
+        invitedWedding.setGroomName("Kabir");
+
+        WeddingMembership mem = new WeddingMembership();
+        mem.setWedding(invitedWedding);
+        mem.setUser(me);
+        mem.setRole(WeddingMembership.Role.ORGANIZER);
+
+        when(membershipRepository.findByUserId(10L)).thenReturn(List.of(mem));
+        when(membershipRepository.findByWeddingIdAndUserId(1L, 10L)).thenReturn(Optional.of(mem));
+        when(weddingRepository.findByOwnerUser_Id(10L)).thenReturn(List.of(emptyOwned));
+        when(weddingRepository.findById(1L)).thenReturn(Optional.of(invitedWedding));
+
+        Map<String, Object> summary = service.getWorkspaceForUser(null);
+
+        assertThat(summary.get("id")).isEqualTo(1L);
+        assertThat(summary.get("brideName")).isEqualTo("Ananya");
+        assertThat(summary.get("groomName")).isEqualTo("Kabir");
+        assertThat(summary.get("role")).isEqualTo("ORGANIZER");
+    }
+
+    @Test
     void budgetUpdateWithoutWeddingIdIsBadRequest() {
         assertThatThrownBy(() -> service.updateBudgetTarget(null, BigDecimal.TEN))
                 .isInstanceOf(BadRequestException.class);

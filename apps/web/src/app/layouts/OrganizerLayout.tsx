@@ -25,6 +25,7 @@ import {
 
 import { getLocalAuthSession, clearLocalAuthSession } from '../../services/authService'
 import { workspacesApi } from '../../services/apiClient'
+import { getAssignedWorkspaceForEmail } from '../../services/membershipStore'
 
 export default function OrganizerLayout() {
   const navigate = useNavigate()
@@ -56,19 +57,31 @@ export default function OrganizerLayout() {
         ? `weddingos_${email.toLowerCase().replace(/[^a-z0-9]/g, '_')}_wedding`
         : 'weddingos_active_wedding'
 
+      // Check for an assigned wedding workspace for this email
+      const assigned = email ? getAssignedWorkspaceForEmail(email) : null
+
       try {
-        // Try user-scoped storage first, fallback to active
-        const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
-        if (stored) {
-          const parsed = JSON.parse(stored)
-          // If stored wedding has a userEmail and doesn't match current user, do not paint it
-          if (!parsed.userEmail || !email || parsed.userEmail.toLowerCase() === email.toLowerCase()) {
-            setWedding({
-              brideName: parsed.brideName || '',
-              groomName: parsed.groomName || '',
-              weddingDate: parsed.weddingDate || '',
-              locationName: parsed.locationName || parsed.venueName || parsed.city || '',
-            })
+        if (assigned && assigned.wedding) {
+          setWedding({
+            brideName: assigned.wedding.brideName || '',
+            groomName: assigned.wedding.groomName || '',
+            weddingDate: assigned.wedding.weddingDate || '',
+            locationName: assigned.wedding.locationName || assigned.wedding.venueName || assigned.wedding.city || '',
+          })
+          localStorage.setItem('weddingos_active_wedding', JSON.stringify(assigned.wedding))
+        } else {
+          // Try user-scoped storage first, fallback to active
+          const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
+          if (stored) {
+            const parsed = JSON.parse(stored)
+            if (!parsed.userEmail || !email || parsed.userEmail.toLowerCase() === email.toLowerCase()) {
+              setWedding({
+                brideName: parsed.brideName || '',
+                groomName: parsed.groomName || '',
+                weddingDate: parsed.weddingDate || '',
+                locationName: parsed.locationName || parsed.venueName || parsed.city || '',
+              })
+            }
           }
         }
       } catch {
@@ -76,7 +89,7 @@ export default function OrganizerLayout() {
       }
 
       try {
-        const active = await workspacesApi.getActive(undefined, email, clerkId, fullName)
+        const active = await workspacesApi.getActive(assigned?.weddingId, email, clerkId, fullName)
         if (active && !isCancelled) {
           const updated = {
             id: active.id,

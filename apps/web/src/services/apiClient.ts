@@ -2,20 +2,7 @@ function getBaseUrl(): string {
   if (import.meta.env.VITE_API_URL) {
     return import.meta.env.VITE_API_URL
   }
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname
-    if (
-      host === 'localhost' ||
-      host === '127.0.0.1' ||
-      host.startsWith('192.168.') ||
-      host.startsWith('10.') ||
-      host.endsWith('.local')
-    ) {
-      return `http://${host}:8080/api/v1`
-    }
-    return 'https://weddingos-api.onrender.com/api/v1'
-  }
-  return 'http://localhost:8080/api/v1'
+  return 'https://weddingos-api.onrender.com/api/v1'
 }
 
 const API_BASE_URL = getBaseUrl()

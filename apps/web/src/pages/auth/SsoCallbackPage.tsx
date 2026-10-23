@@ -24,7 +24,7 @@ export default function SsoCallbackPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-[#faf9f6]">
       <AuthenticateWithRedirectCallback
-        signUpForceRedirectUrl="/app/onboarding"
+        signUpForceRedirectUrl="/app/dashboard"
         signInForceRedirectUrl="/app/dashboard"
       />
       <div className="flex flex-col items-center gap-4 mt-6">

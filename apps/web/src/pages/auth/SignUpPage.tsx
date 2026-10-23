@@ -17,7 +17,7 @@ import {
 export default function SignUpPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const redirectUrl = searchParams.get('redirect_url') || '/app/onboarding'
+  const redirectUrl = searchParams.get('redirect_url') || '/app/dashboard'
   const { isLoaded, signUp, setActive } = useSignUp()
   const [fullName, setFullName] = useState('')
   const [email, setEmail] = useState('')

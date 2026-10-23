@@ -68,17 +68,38 @@ public class CurrentUserService {
     }
 
     private AppUser linkOrCreate(String sub) {
-        if (!clerkDirectory.isConfigured()) {
-            log.error("First-time sign-in cannot be completed: CLERK_SECRET_KEY is not configured.");
-            throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
-                    "Account setup is temporarily unavailable. Please try again later.");
+        String email = null;
+        String name = null;
+
+        if (clerkDirectory.isConfigured()) {
+            ClerkUserDirectory.ClerkUserProfile profile = clerkDirectory.findUser(sub)
+                    .orElseThrow(() -> new ForbiddenException("Your account could not be found with the identity provider."));
+            email = profile.verifiedPrimaryEmail();
+            name = profile.fullName();
+        } else {
+            // Fallback: check claims from verified JWT token
+            Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+            if (auth != null && auth.getPrincipal() instanceof Jwt jwt) {
+                if (jwt.hasClaim("email")) {
+                    email = jwt.getClaimAsString("email");
+                } else if (jwt.hasClaim("primary_email_address")) {
+                    email = jwt.getClaimAsString("primary_email_address");
+                }
+                if (jwt.hasClaim("name")) {
+                    name = jwt.getClaimAsString("name");
+                }
+            }
+            if (email == null || email.isBlank()) {
+                log.error("First-time sign-in cannot be completed: CLERK_SECRET_KEY is not configured and token lacks email claim.");
+                throw new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE,
+                        "Account setup is temporarily unavailable. Please try again later.");
+            }
         }
-        ClerkUserDirectory.ClerkUserProfile profile = clerkDirectory.findUser(sub)
-                .orElseThrow(() -> new ForbiddenException("Your account could not be found with the identity provider."));
-        String email = profile.verifiedPrimaryEmail();
+
         if (email == null || email.isBlank()) {
             throw new ForbiddenException("A verified primary email address is required to use WeddingOS.");
         }
+        email = email.trim().toLowerCase();
 
         List<AppUser> linkable = userRepository.findAllByEmailIgnoreCase(email).stream()
                 .filter(u -> u.getClerkUserId() == null || !u.getClerkUserId().startsWith(REAL_CLERK_ID_PREFIX))
@@ -90,18 +111,18 @@ public class CurrentUserService {
                     "More than one existing account matches your email. Please contact support to merge them.");
         }
 
-        String name = profile.fullName() != null ? profile.fullName() : email.split("@")[0];
+        String displayName = name != null && !name.isBlank() ? name : email.split("@")[0];
         if (linkable.size() == 1) {
             AppUser existing = linkable.get(0);
             existing.setClerkUserId(sub);
             existing.setEmail(email);
             if (existing.getFullName() == null || existing.getFullName().isBlank()) {
-                existing.setFullName(name);
+                existing.setFullName(displayName);
             }
             log.info("Linked existing user id={} to its Clerk account on first verified sign-in.", existing.getId());
             return userRepository.save(existing);
         }
 
-        return userRepository.save(new AppUser(sub, email, name));
+        return userRepository.save(new AppUser(sub, email, displayName));
     }
 }

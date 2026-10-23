@@ -162,19 +162,33 @@ public class WorkspaceService {
             }
         }
 
-        // Check if user owns any wedding
-        if (wedding == null) {
-            List<Wedding> owned = weddingRepository.findByOwnerUser_Id(user.getId());
-            if (!owned.isEmpty()) {
-                wedding = owned.get(owned.size() - 1);
-            }
-        }
-
-        // Check if user is an invited member of a wedding
+        // Check memberships and owned weddings
         if (wedding == null) {
             List<WeddingMembership> memberships = membershipRepository.findByUserId(user.getId());
-            if (!memberships.isEmpty()) {
+            List<Wedding> owned = weddingRepository.findByOwnerUser_Id(user.getId());
+
+            // Check if any membership is for an active/configured wedding
+            java.util.Optional<Wedding> configuredMembership = memberships.stream()
+                    .map(WeddingMembership::getWedding)
+                    .filter(w -> (w.getBrideName() != null && !w.getBrideName().isBlank())
+                            || (w.getGroomName() != null && !w.getGroomName().isBlank()))
+                    .reduce((first, second) -> second);
+
+            // Check if any owned wedding is active/configured
+            java.util.Optional<Wedding> configuredOwned = owned.stream()
+                    .filter(w -> (w.getBrideName() != null && !w.getBrideName().isBlank())
+                            || (w.getGroomName() != null && !w.getGroomName().isBlank()))
+                    .reduce((first, second) -> second);
+
+            if (configuredMembership.isPresent() && configuredOwned.isEmpty()) {
+                // User is an invited member of an active wedding and has no configured wedding of their own
+                wedding = configuredMembership.get();
+            } else if (configuredOwned.isPresent()) {
+                wedding = configuredOwned.get();
+            } else if (!memberships.isEmpty()) {
                 wedding = memberships.get(memberships.size() - 1).getWedding();
+            } else if (!owned.isEmpty()) {
+                wedding = owned.get(owned.size() - 1);
             }
         }
 

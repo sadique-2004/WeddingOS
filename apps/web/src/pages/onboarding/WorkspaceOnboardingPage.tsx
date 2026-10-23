@@ -1,13 +1,16 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useUser } from '@clerk/clerk-react'
 import { Button } from '../../components/ui/Button'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../../components/ui/Card'
 import { Input } from '../../components/ui/Input'
 import { Sparkles, Calendar, MapPin, Heart, ArrowRight, CheckCircle2 } from 'lucide-react'
 import { workspaceApi } from '../../services/apiClient'
+import { getAssignedWorkspaceForEmail } from '../../services/membershipStore'
 
 export default function WorkspaceOnboardingPage() {
   const navigate = useNavigate()
+  const { user } = useUser()
 
   // Form State matching API_DESIGN.md POST /api/v1/weddings
   const [formData, setFormData] = useState({
@@ -21,6 +24,45 @@ export default function WorkspaceOnboardingPage() {
 
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+
+  // If the user was already assigned to a workspace (or owns an existing one), redirect to dashboard
+  useEffect(() => {
+    let isCancelled = false
+
+    const checkExistingWorkspace = async () => {
+      const email = user?.primaryEmailAddress?.emailAddress || ''
+      const normalizedEmail = email.trim().toLowerCase()
+
+      // 1. Check local assignment by email
+      const assigned = getAssignedWorkspaceForEmail(normalizedEmail)
+      if (assigned && assigned.wedding) {
+        localStorage.setItem('weddingos_active_wedding', JSON.stringify(assigned.wedding))
+        window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+        navigate('/app/dashboard', { replace: true })
+        return
+      }
+
+      // 2. Check backend for active workspace (owned or assigned membership)
+      try {
+        const active = await workspaceApi.getActive()
+        if (!isCancelled && active && (active.brideName || active.groomName || active.venueName || active.city)) {
+          localStorage.setItem('weddingos_active_wedding', JSON.stringify(active))
+          window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
+          navigate('/app/dashboard', { replace: true })
+        }
+      } catch {
+        // Proceed with onboarding if no workspace exists yet
+      }
+    }
+
+    if (user) {
+      checkExistingWorkspace()
+    }
+
+    return () => {
+      isCancelled = true
+    }
+  }, [user, navigate])
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }))
@@ -88,13 +130,8 @@ export default function WorkspaceOnboardingPage() {
       localStorage.setItem('weddingos_active_wedding', JSON.stringify(workspaceData))
       window.dispatchEvent(new Event('weddingos_wedding_updated'))
 
-      // 3. Reset local storage caches so new user starts completely fresh with 0 events & 0 guests
-      localStorage.removeItem('weddingos_events_custom')
-      localStorage.removeItem('weddingos_family_invitations')
-      localStorage.removeItem('weddingos_workspace_members')
-      localStorage.removeItem('weddingos_website_config')
-      localStorage.removeItem('weddingos_gallery_photos')
-
+      // 3. Dispatch active workspace update
+      window.dispatchEvent(new Event('weddingos_active_wedding_changed'))
       setIsLoading(false)
       navigate('/app/dashboard')
     } catch (err: any) {

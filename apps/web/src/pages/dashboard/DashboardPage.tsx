@@ -25,8 +25,8 @@ import {
   Info
 } from 'lucide-react'
 import { workspacesApi, eventsApi, tasksApi, expensesApi, galleryApi, getActiveWeddingId } from '../../services/apiClient'
-import { getInvitations, resetToDemoData } from '../../services/invitationStore'
-import { resetMembershipDemoData } from '../../services/membershipStore'
+import { getInvitations, syncInvitationsFromBackend, resetToDemoData } from '../../services/invitationStore'
+import { getAssignedWorkspaceForEmail, resetMembershipDemoData } from '../../services/membershipStore'
 
 interface DashboardWedding {
   id?: number
@@ -122,7 +122,8 @@ export default function DashboardPage() {
         : 'weddingos_active_wedding'
 
       // 1. Load active workspace summary dynamically for logged-in user
-      const active = await workspacesApi.getActive(undefined, email, clerkId, fullName).catch(() => null)
+      const assigned = email ? getAssignedWorkspaceForEmail(email) : null
+      const active = await workspacesApi.getActive(assigned?.weddingId, email, clerkId, fullName).catch(() => null)
       if (active) {
         setWedding({
           id: active.id || 1,
@@ -138,6 +139,18 @@ export default function DashboardPage() {
         if (active.totalRecordedSpending !== undefined) {
           setTotalExpenses(Number(active.totalRecordedSpending) || 0)
         }
+      } else if (assigned && assigned.wedding) {
+        setWedding({
+          id: assigned.weddingId || assigned.wedding.id || 1,
+          brideName: assigned.wedding.brideName || '',
+          groomName: assigned.wedding.groomName || '',
+          weddingDate: assigned.wedding.weddingDate || '',
+          city: assigned.wedding.city || '',
+          venueName: assigned.wedding.venueName || '',
+          locationName: assigned.wedding.locationName || assigned.wedding.venueName || assigned.wedding.city || '',
+          totalBudgetTarget: Number(assigned.wedding.totalBudgetTarget) || 0,
+          expectedGuestCapacity: Number(assigned.wedding.expectedGuestCapacity) || 0,
+        })
       } else {
         const stored = localStorage.getItem(userScopeKey) || localStorage.getItem('weddingos_active_wedding')
         if (stored) {
@@ -212,8 +225,9 @@ export default function DashboardPage() {
         }
       }
 
-      // 4. Load Guest / RSVP Metrics from invitation store
-      const invitations = getInvitations(activeWeddingId)
+      // 4. Load Guest / RSVP Metrics from invitation store (sync from backend first)
+      const syncedInv = await syncInvitationsFromBackend(activeWeddingId).catch(() => null)
+      const invitations = syncedInv || getInvitations(activeWeddingId)
       const totalInvitedFamilies = invitations.length
       const confirmedGuests = invitations.reduce((acc, inv) => {
         if (inv.rsvpStatus === 'ATTENDING') {

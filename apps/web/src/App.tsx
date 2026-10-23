@@ -12,11 +12,11 @@ export default function App() {
     <ClerkProvider
       publishableKey={PUBLISHABLE_KEY}
       signInFallbackRedirectUrl="/app/dashboard"
-      signUpFallbackRedirectUrl="/app/onboarding"
+      signUpFallbackRedirectUrl="/app/dashboard"
       signInForceRedirectUrl="/app/dashboard"
-      signUpForceRedirectUrl="/app/onboarding"
+      signUpForceRedirectUrl="/app/dashboard"
       afterSignInUrl="/app/dashboard"
-      afterSignUpUrl="/app/onboarding"
+      afterSignUpUrl="/app/dashboard"
       afterSignOutUrl="/sign-in"
     >
       <ClerkAuthBridge />
