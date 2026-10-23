@@ -32,6 +32,7 @@ public class InvitationService {
         this(invitationRepository, null, access);
     }
 
+    @org.springframework.beans.factory.annotation.Autowired
     public InvitationService(FamilyInvitationRepository invitationRepository,
                              WeddingSlugRepository slugRepository,
                              WeddingAccessService access) {
